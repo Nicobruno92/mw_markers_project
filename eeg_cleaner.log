@@ -1,0 +1,50 @@
+18/02/2021 17:31:17 INFO Started ICA cleaner
+18/02/2021 17:31:17 INFO Creating ICA report
+18/02/2021 17:31:17 WARNING This filename (path+file) does not conform to MNE naming conventions. All epochs files should end with -epo.fif, -epo.fif.gz, _epo.fif or _epo.fif.gz
+18/02/2021 17:31:17 INFO Reading path+file ...
+18/02/2021 17:31:55 INFO Started ICA cleaner
+18/02/2021 17:31:55 INFO Creating ICA report
+18/02/2021 17:31:55 WARNING This filename (file_path) does not conform to MNE naming conventions. All epochs files should end with -epo.fif, -epo.fif.gz, _epo.fif or _epo.fif.gz
+18/02/2021 17:31:55 INFO Reading file_path ...
+19/02/2021 17:35:17 INFO Started ICA cleaner
+19/02/2021 17:35:17 INFO Creating ICA report
+19/02/2021 17:35:17 INFO Reading VP11_crop_rMean_trim10_modmarker6.set-epo.fif ...
+19/02/2021 17:35:17 INFO     Found the data of interest:
+19/02/2021 17:35:17 INFO         t =    -800.78 ...     800.78 ms
+19/02/2021 17:35:17 INFO         0 CTF compensation matrices available
+19/02/2021 17:35:18 INFO Not setting metadata
+19/02/2021 17:35:18 INFO Not setting metadata
+19/02/2021 17:35:18 INFO 227 matching events found
+19/02/2021 17:35:18 INFO No baseline correction applied
+19/02/2021 17:35:18 INFO 0 projection items activated
+19/02/2021 17:42:20 INFO     Using multitaper spectrum estimation with 7 DPSS windows
+19/02/2021 17:42:21 INFO Not setting metadata
+19/02/2021 17:42:21 INFO Not setting metadata
+19/02/2021 17:42:21 INFO 227 matching events found
+19/02/2021 17:42:21 INFO No baseline correction applied
+19/02/2021 17:42:21 INFO 0 projection items activated
+19/02/2021 17:42:21 INFO 0 bad epochs dropped
+19/02/2021 17:42:21 INFO Not setting metadata
+19/02/2021 17:42:21 INFO Not setting metadata
+19/02/2021 17:42:21 INFO 227 matching events found
+19/02/2021 17:42:21 INFO No baseline correction applied
+19/02/2021 17:42:21 INFO 0 projection items activated
+19/02/2021 17:42:21 INFO 0 bad epochs dropped
+19/02/2021 17:42:21 INFO Not setting metadata
+19/02/2021 17:42:21 INFO Not setting metadata
+19/02/2021 17:42:21 INFO 227 matching events found
+19/02/2021 17:42:21 INFO No baseline correction applied
+19/02/2021 17:42:21 INFO 0 projection items activated
+19/02/2021 17:42:21 INFO 0 bad epochs dropped
+19/02/2021 17:42:22 INFO Not setting metadata
+19/02/2021 17:42:22 INFO Not setting metadata
+19/02/2021 17:42:22 INFO 227 matching events found
+19/02/2021 17:42:22 INFO No baseline correction applied
+19/02/2021 17:42:22 INFO 0 projection items activated
+19/02/2021 17:42:22 INFO 0 bad epochs dropped
+19/02/2021 17:42:22 INFO Not setting metadata
+19/02/2021 17:42:22 INFO Not setting metadata
+19/02/2021 17:42:22 INFO 227 matching events found
+19/02/2021 17:42:22 INFO No baseline correction applied
+19/02/2021 17:42:22 INFO 0 projection items activated
+19/02/2021 17:42:22 INFO 0 bad epochs dropped
