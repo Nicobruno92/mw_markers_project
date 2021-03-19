@@ -191,3 +191,27 @@ def make_correct_labels(raw, nb_prev_trials=5):
             dict_final_events[str_label] = row.label.astype(int)
 
     return array_events, dict_final_events
+
+
+#####EPOCHING#####
+def create_epochs(epoch_type, raw, events, event_id, save = False):
+    
+    if epoch_type == 'evoked':
+    
+        tmin, tmax = -0.2, 0.6
+
+        baseline = (None,0)
+    elif epoch_type == 'pseudo-rs':
+        tmin, tmax = -0.8, 0
+
+        baseline = (None,-0.6)
+    
+    
+    epochs = mne.Epochs(raw, events = events, event_id= event_id, baseline = baseline ,
+                            tmin = tmin, tmax = tmax, picks = ('eeg', 'eog'), preload = True,
+                            verbose = False)
+    
+    if save == True:
+        epochs.save(folder + participant + epoch_type + '_epo.fif', overwrite = True)
+    
+    return epochs
