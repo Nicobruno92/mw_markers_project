@@ -14,7 +14,7 @@ def make_correct_labels(raw, nb_prev_trials=5):
     events_from_annot, event_dict = mne.events_from_annotations(raw)
 
     # fraction events label in different kinds
-    SC_labels = [event_dict[your_key] for your_key in [format(x, '02d') for x in range(150, 169)] if
+    SC_labels = [event_dict[your_key] for your_key in [format(x, '02d') for x in range(150, 199)] if
                  your_key in event_dict]
     PC_labels = [event_dict[your_key] for your_key in [format(x, '02d') for x in range(50, 99)] if
                  your_key in event_dict]
