@@ -201,6 +201,7 @@ def create_epochs(epoch_type, raw, events, event_id, save = False):
         tmin, tmax = -0.2, 0.6
 
         baseline = (None,0)
+        
     elif epoch_type == 'pseudo-rs':
         tmin, tmax = -0.8, 0
 
