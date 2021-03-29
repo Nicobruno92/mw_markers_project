@@ -66,7 +66,7 @@ def make_correct_labels(raw, nb_prev_trials=5):
 
             #the for loop is beause sometimes it has events between the probe event and the report
             for j in range(5):
-                if df_events.trigger[index + j] in probe_report:
+                try:
                     if df_events.trigger[index + j] == event_dict['1']:
                         df_events.mind[index - i] = 1
                     elif df_events.trigger[index + j] == event_dict['2']:
@@ -77,6 +77,17 @@ def make_correct_labels(raw, nb_prev_trials=5):
                         df_events.mind[index - i] = 4
                     elif df_events.trigger[index + j] == event_dict['5']:
                         df_events.mind[index - i] = 5
+                    break
+                except:
+                    if df_events.trigger[index + j] == event_dict['2']:
+                        df_events.mind[index - i] = 2
+                    elif df_events.trigger[index + j] == event_dict['3']:
+                        df_events.mind[index - i] = 3
+                    elif df_events.trigger[index + j] == event_dict['4']:
+                        df_events.mind[index - i] = 4
+                    elif df_events.trigger[index + j] == event_dict['5']:
+                        df_events.mind[index - i] = 5
+                        
                     break
 
             if df_events.trigger[index - i] in go_trials + nogo_trials:
@@ -123,7 +134,7 @@ def make_correct_labels(raw, nb_prev_trials=5):
 
         if row.correct == 1:
             label += 10
-        if row.correct == 0:
+        elif row.correct == 0:
             label += 00
 
         label += row.prev_trial
@@ -131,6 +142,10 @@ def make_correct_labels(raw, nb_prev_trials=5):
         return (label)
 
     def make_str_label(label):
+        """
+        Makes the string label. Detailing the condtion for the key of the dictionary
+        label: numeric label in a predefined format. See table
+        """
         label = str(label)
         str_label = ''
 
@@ -160,7 +175,7 @@ def make_correct_labels(raw, nb_prev_trials=5):
 
         if label[3] == '1':
             str_label += 'correct'
-        if label[3] == '0':
+        elif label[3] == '0':
             str_label += 'incorrect'
         str_label += '/'
 
@@ -177,10 +192,7 @@ def make_correct_labels(raw, nb_prev_trials=5):
 
     df_events = df_events[df_events.prev_trial <= nb_prev_trials]
     df_events = df_events[df_events.correct.notnull()]
-
-    # create array of events
-    array_events = df_events[['time', '0', 'label']].to_numpy()
-    array_events = array_events.astype(int)
+    df_events = df_events[df_events.probe != 0]
 
     # create dictionary of events names
     dict_final_events = {}
@@ -190,11 +202,18 @@ def make_correct_labels(raw, nb_prev_trials=5):
         if str_label not in dict_final_events.keys():
             dict_final_events[str_label] = row.label.astype(int)
 
+    # create array of events
+    array_events = df_events[['time', '0', 'label']].to_numpy()
+    array_events = array_events.astype(int)
+
     return array_events, dict_final_events
 
 
 #####EPOCHING#####
 def create_epochs(epoch_type, raw, events, event_id, save = False):
+    """
+    Creates the epochs for the Evoked epochs and the pseudo resting state epochs.
+    """
     
     if epoch_type == 'evoked':
     
@@ -216,3 +235,38 @@ def create_epochs(epoch_type, raw, events, event_id, save = False):
         epochs.save(folder + participant + epoch_type + '_epo.fif', overwrite = True)
     
     return epochs
+
+
+
+def set_montage(raw):
+    """
+    Set the correct montage for the system. It sets the electrodes to EOG. 
+    Removes channels that are not used. And fix the channel names for the montage for some recordings
+    """
+    try:
+        raw.set_channel_types({'EXG3': 'eog', 'EXG4': 'eog', 'EXG5': 'eog','EXG6': 'eog','EXG1': 'eog', 'EXG2': 'eog', 'EXG7': 'eog', 'EXG8' : 'eog'})
+
+        raw = raw.pick_types(eeg = True, eog = True, exclude = ['EXG1', 'EXG2', 'EXG7', 'EXG8'])
+
+        raw = raw.set_montage('biosemi64') # ask if biosemi or 10-20 montage
+        
+    except:
+        corrected_chs = {'C1-0': 'C1', 'C3-0': 'C3', 'C5-0':'C5', 'C2-0': 'C2', 'C4-0':'C4', 'C6-0':'C6','C1-1':'EXG1',
+         'C2-1':'EXG2',
+         'C3-1':'EXG3',
+         'C4-1':'EXG4',
+         'C5-1':'EXG5',
+         'C6-1':'EXG6',
+         'C7':'EXG7',
+         'C8' :'EXG8'}
+
+        raw = raw.rename_channels(corrected_chs)
+        
+        raw.set_channel_types({'EXG3': 'eog', 'EXG4': 'eog', 'EXG5': 'eog','EXG6': 'eog','EXG1': 'eog', 'EXG2': 'eog', 'EXG7': 'eog', 'EXG8' : 'eog'})
+
+        raw = raw.pick_types(eeg = True, eog = True, exclude = ['EXG1', 'EXG2', 'EXG7', 'EXG8'])
+
+        raw = raw.set_montage('biosemi64') # ask if biosemi or 10-20 montage
+    
+    return raw
+
