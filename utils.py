@@ -69,26 +69,32 @@ def make_correct_labels(raw, nb_prev_trials=5):
                 try:
                     if df_events.trigger[index + j] == event_dict['1']:
                         df_events.mind[index - i] = 1
+                        break
                     elif df_events.trigger[index + j] == event_dict['2']:
                         df_events.mind[index - i] = 2
+                        break
                     elif df_events.trigger[index + j] == event_dict['3']:
                         df_events.mind[index - i] = 3
+                        break
                     elif df_events.trigger[index + j] == event_dict['4']:
                         df_events.mind[index - i] = 4
+                        break
                     elif df_events.trigger[index + j] == event_dict['5']:
                         df_events.mind[index - i] = 5
-                    break
+                        break
                 except:
                     if df_events.trigger[index + j] == event_dict['2']:
                         df_events.mind[index - i] = 2
+                        break
                     elif df_events.trigger[index + j] == event_dict['3']:
                         df_events.mind[index - i] = 3
+                        break
                     elif df_events.trigger[index + j] == event_dict['4']:
                         df_events.mind[index - i] = 4
+                        break
                     elif df_events.trigger[index + j] == event_dict['5']:
                         df_events.mind[index - i] = 5
-                        
-                    break
+                        break
 
             if df_events.trigger[index - i] in go_trials + nogo_trials:
 
