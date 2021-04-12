@@ -3,6 +3,88 @@ import numpy as np
 import pandas as pd
 
 
+def make_num_labels(row):
+    label = 00000000
+    if row.probe == 1:
+        label += 10000000
+    elif row.probe == 2:
+        label += 20000000
+
+    if row.mind == 1:
+        label += 1000000
+    elif row.mind == 2:
+        label += 2000000
+    elif row.mind == 3:
+        label += 3000000
+    elif row.mind == 4:
+        label += 4000000
+    elif row.mind == 5:
+        label += 5000000
+
+    if row.trigger in go_trials:
+        label += 100000
+    elif row.trigger in nogo_trials:
+        label += 000000
+
+    if row.correct == 1:
+        label += 10000
+    elif row.correct == 0:
+        label += 00000
+
+    label += int(row.prev_trial*1000)
+
+    label += int(row.segment)
+
+    return (int(label))
+
+def make_str_label(label):
+    """
+    Makes the string label. Detailing the condtion for the key of the dictionary
+    label: numeric label in a predefined format. See table
+    """
+    label = str(label)
+    str_label = ''
+
+    if label[0] == '1':
+        str_label += 'PC'
+    elif label[0] == '2':
+        str_label += 'SC'
+    str_label += '/'
+
+    if label[1] == '1':
+        str_label += 'on-task'
+    elif label[1] == '2':
+        str_label += 'about-task'
+    elif label[1] == '3':
+        str_label += 'distracted'
+    elif label[1] == '4':
+        str_label += 'dMW'
+    elif label[1] == '5':
+        str_label += 'sMW'
+    str_label += '/'
+
+    if label[2] == '1':
+        str_label += 'go'
+    elif label[2] == '0':
+        str_label += 'nogo'
+    str_label += '/'
+
+    if label[3] == '1':
+        str_label += 'correct'
+    elif label[3] == '0':
+        str_label += 'incorrect'
+    str_label += '/'
+
+    str_label += label[4]
+    str_label += '/'
+
+    str_label += f's{label[5:]}'
+
+
+    return (str_label)
+
+
+
 def make_correct_labels(raw, nb_prev_trials=5):
     """
     Takes a raw file with raw labels, and returns an array with the markers of interest and the correct labels
@@ -115,79 +197,6 @@ def make_correct_labels(raw, nb_prev_trials=5):
         elif row.trigger in nogo_trials and row.len_segment == 1:
             return (1)
 
-    def make_num_labels(row):
-        label = 00000
-        if row.probe == 1:
-            label += 10000
-        elif row.probe == 2:
-            label += 20000
-
-        if row.mind == 1:
-            label += 1000
-        elif row.mind == 2:
-            label += 2000
-        elif row.mind == 3:
-            label += 3000
-        elif row.mind == 4:
-            label += 4000
-        elif row.mind == 5:
-            label += 5000
-
-        if row.trigger in go_trials:
-            label += 100
-        elif row.trigger in nogo_trials:
-            label += 000
-
-        if row.correct == 1:
-            label += 10
-        elif row.correct == 0:
-            label += 00
-
-        label += row.prev_trial
-
-        return (label)
-
-    def make_str_label(label):
-        """
-        Makes the string label. Detailing the condtion for the key of the dictionary
-        label: numeric label in a predefined format. See table
-        """
-        label = str(label)
-        str_label = ''
-
-        if label[0] == '1':
-            str_label += 'PC'
-        elif label[0] == '2':
-            str_label += 'SC'
-        str_label += '/'
-
-        if label[1] == '1':
-            str_label += 'on-task'
-        elif label[1] == '2':
-            str_label += 'about-task'
-        elif label[1] == '3':
-            str_label += 'distracted'
-        elif label[1] == '4':
-            str_label += 'dMW'
-        elif label[1] == '5':
-            str_label += 'sMW'
-        str_label += '/'
-
-        if label[2] == '1':
-            str_label += 'go'
-        elif label[2] == '0':
-            str_label += 'nogo'
-        str_label += '/'
-
-        if label[3] == '1':
-            str_label += 'correct'
-        elif label[3] == '0':
-            str_label += 'incorrect'
-        str_label += '/'
-
-        str_label += str(label[4])
-
-        return (str_label)
 
     df_events = (df_events
         .assign(
