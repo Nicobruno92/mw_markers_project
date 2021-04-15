@@ -3,40 +3,6 @@ import numpy as np
 import pandas as pd
 
 
-def make_num_labels(row):
-    label = 00000000
-    if row.probe == 1:
-        label += 10000000
-    elif row.probe == 2:
-        label += 20000000
-
-    if row.mind == 1:
-        label += 1000000
-    elif row.mind == 2:
-        label += 2000000
-    elif row.mind == 3:
-        label += 3000000
-    elif row.mind == 4:
-        label += 4000000
-    elif row.mind == 5:
-        label += 5000000
-
-    if row.trigger in go_trials:
-        label += 100000
-    elif row.trigger in nogo_trials:
-        label += 000000
-
-    if row.correct == 1:
-        label += 10000
-    elif row.correct == 0:
-        label += 00000
-
-    label += int(row.prev_trial*1000)
-
-    label += int(row.segment)
-
-    return (int(label))
-
 def make_str_label(label):
     """
     Makes the string label. Detailing the condtion for the key of the dictionary
@@ -82,8 +48,6 @@ def make_str_label(label):
 
 
     return (str_label)
-
-
 
 def make_correct_labels(raw, nb_prev_trials=5):
     """
@@ -196,7 +160,41 @@ def make_correct_labels(raw, nb_prev_trials=5):
             return (0)
         elif row.trigger in nogo_trials and row.len_segment == 1:
             return (1)
+    
+    def make_num_labels(row):
+        label = 00000000
+        if row.probe == 1:
+            label += 10000000
+        elif row.probe == 2:
+            label += 20000000
 
+        if row.mind == 1:
+            label += 1000000
+        elif row.mind == 2:
+            label += 2000000
+        elif row.mind == 3:
+            label += 3000000
+        elif row.mind == 4:
+            label += 4000000
+        elif row.mind == 5:
+            label += 5000000
+
+        if row.trigger in go_trials:
+            label += 100000
+        elif row.trigger in nogo_trials:
+            label += 000000
+
+        if row.correct == 1:
+            label += 10000
+        elif row.correct == 0:
+            label += 00000
+
+        label += int(row.prev_trial*1000)
+
+        label += int(row.segment)
+
+        return (int(label))
+    
 
     df_events = (df_events
         .assign(
@@ -285,3 +283,22 @@ def set_montage(raw):
     
     return raw
 
+
+def balance_sample(df, subject, group_var, levels = 2):
+    """
+    Delete all subjects that don't have an observation for each grouping variable
+    df: datafrane
+    subject: subject variable
+    group_var: grouping variable
+    levels: the levels of the grouping variable
+    """
+    df = df[
+        df[subject].isin(
+            [
+                sid
+                for sid, group in df.groupby(subject)
+                if len(set(group[group_var])) == levels
+            ]
+        )
+    ]
+    return df
