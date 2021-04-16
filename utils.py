@@ -2,6 +2,13 @@ import mne
 import numpy as np
 import pandas as pd
 
+from sklearn.metrics import roc_auc_score
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler, RobustScaler
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.model_selection import GridSearchCV, train_test_split, cross_val_score, GroupShuffleSplit
+from sklearn.ensemble import ExtraTreesClassifier
+
 
 def make_str_label(label):
     """
@@ -302,3 +309,61 @@ def balance_sample(df, subject, group_var, levels = 2):
         )
     ]
     return df
+
+
+
+def multivariate_classifier(data, label, features, model, grid_search = False):
+	"""
+    data: dataframe with features and labels
+    label: name of the column with the labels for the classification
+    features: feaure or list of features corresponding to the columns of the data frame with the markers
+    model: type of classifier model
+    grid_search: if true it will apply grid search 5cv to find the best parameters of C and gamma, only for the SVM. Deafault: False
+    """
+	if model == 'SVM':
+		if grid_search == True:
+			y, lbl = pd.factorize(data[label])
+			X = data[features].astype('float32').values
+
+			steps = [('scaler', StandardScaler()), ('SVM', SVC(probability=True))]
+			pipe = Pipeline(steps)
+
+			parameteres = {'SVM__C':[0.001,0.1,10,100,10e5], 'SVM__gamma':[0.1,0.01]}
+			grid = GridSearchCV(pipe, param_grid=parameteres, cv=5, n_jobs = -1)
+			grid.fit(X, y) 
+            
+			steps = [('scaler', StandardScaler()), ('SVM', SVC(C =grid.best_params_['SVM__C'], gamma =grid.best_params_['SVM__gamma'], probability=True))]
+			pipe_cv = Pipeline(steps)
+
+			cv = GroupShuffleSplit(n_splits=50, train_size=0.8, test_size=0.2,
+				random_state=42)
+
+			aucs = cross_val_score(
+			X=X, y=y, estimator=pipe_cv,
+			scoring='roc_auc', cv=cv, groups=np.arange(len(X)))
+
+			df_auc = pd.DataFrame(aucs, columns = ['auc'])
+
+		else:
+			y, lbl = pd.factorize(data[label])
+			X = data[features].astype('float32').values
+
+			   
+			steps = [('scaler', StandardScaler()), ('SVM', SVC(C = 0.001, gamma = 0.1, kernel = 'rbf',probability=True))]
+			pipe = Pipeline(steps)
+
+			cv = GroupShuffleSplit(n_splits=50, train_size=0.8, test_size=0.2,
+				random_state=42)
+
+			aucs = cross_val_score(
+			X=X, y=y, estimator=pipe,
+			scoring='roc_auc', cv=cv, groups=np.arange(len(X)))
+
+			df_auc = pd.DataFrame(aucs, columns = ['auc'])
+            
+    
+#     if model == 'forest':
+#         pass
+			
+			
+	return df_auc
