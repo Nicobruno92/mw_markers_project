@@ -23,7 +23,6 @@ import pycsd
 
 
 
-
 def make_str_label(label):
     """
     Makes the string label. Detailing the condtion for the key of the dictionary
@@ -721,11 +720,11 @@ def bad_participant(epochs, probe, mind):
         .query("mind in ['on-task','dMW', 'sMW']")
         .query("stimuli == 'go'")
         .query("correct == 'correct'")
-        .query('prev_trial <= 4')
+        .query('prev_trial <= 5')
         .assign(
         mind2 = lambda df: np.where(df.mind == 'on-task', 'on-task', 'mw'))
         .groupby(['prev_trial', 'segment']).first())
     
-    df = df[df['probe']==probe].groupby([mind]).filter(lambda x: len(x) >= 8) #min nbr of tri
+    df = df[df['probe']==probe].groupby([mind]).filter(lambda x: len(x) >= 8) #min nbr of trials for condition
     
     return len(set(df[mind])) != 2
