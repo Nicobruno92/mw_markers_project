@@ -1,6 +1,8 @@
 import mne
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
@@ -14,6 +16,9 @@ from sklearn.model_selection import (
     permutation_test_score,
     StratifiedKFold
 )
+
+from sklearn.decomposition import PCA
+
 from sklearn.ensemble import ExtraTreesClassifier
 
 
@@ -323,15 +328,21 @@ def balance_sample(df, subject, group_var, levels = 2):
     ]
     return df
 
-def all_markers(epochs, tmin, tmax, target):
+def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         """
         Computes all ther markers for given epochs.
         epochs: the epochs from which to compute the markers
         tmin: min time for computing markers 
         tmax: max time to compute markers
+        target: reduction target, epochs or topography
+        epochs_erp: if a different preprocessed epochs are used for computing ERP
         
         Evoked markers have already defined times
         """
+        if epochs_erp == None:
+            epochs_erp = epochs
+        
+        
         from scipy.stats import trim_mean
         
         def trim_mean80(a, axis=0):
@@ -423,25 +434,67 @@ def all_markers(epochs, tmin, tmax, target):
 
         datakomplexity = komplexity._reduce_to(reduction_func, target=target, picks=None)
 
-
-        p_e = PermutationEntropy(tmin=tmin, tmax=tmax)
+        
+        
+        
+        ### Permuttion entropy ###
+        p_e = PermutationEntropy(tmin=tmin, tmax=tmax, kernel=3, tau=1)
         p_e.fit(epochs)
         p_eobject = p_e.data_
-        datap_e = p_e._reduce_to(reduction_func, target=target, picks=None)
+        datap_e1 = p_e._reduce_to(reduction_func, target=target, picks=None)
+        
+        ### Permuttion entropy ###
+        p_e = PermutationEntropy(tmin=tmin, tmax=tmax, kernel=3, tau=2)
+        p_e.fit(epochs)
+        p_eobject = p_e.data_
+        datap_e2 = p_e._reduce_to(reduction_func, target=target, picks=None)
+        
+        ### Permuttion entropy ###
+        p_e = PermutationEntropy(tmin=tmin, tmax=tmax, kernel=3, tau=4)
+        p_e.fit(epochs)
+        p_eobject = p_e.data_
+        datap_e4 = p_e._reduce_to(reduction_func, target=target, picks=None)
+        
+        ### Permuttion entropy theta###
+        p_e = PermutationEntropy(tmin=tmin, tmax=tmax, kernel=3, tau=8)
+        p_e.fit(epochs)
+        p_eobject = p_e.data_
+        datap_e8 = p_e._reduce_to(reduction_func, target=target, picks=None)
 
         # =============================================================================
         # wSMI MARKERS
         # =============================================================================
-        wSMI = SymbolicMutualInformation(tmin=tmin, tmax=tmax, kernel=3, tau=8, backend="openmp",
-                     method_params=None, method='weighted', comment='default')
-        wSMI.fit(epochs)
-        wSMIobject = wSMI.data_
-
         reduction_func= [{'axis': 'channels_y', 'function': np.median},
              {'axis': 'channels', 'function': np.mean},
              {'axis': 'epochs', 'function': trim_mean80}]
         
-        datawSMI = wSMI._reduce_to(reduction_func, target=target, picks=None)
+        ###wSMI ###
+        wSMI = SymbolicMutualInformation(tmin=tmin, tmax=tmax, kernel=3, tau=1, backend="openmp",
+                     method_params=None, method='weighted', comment='default')
+        wSMI.fit(epochs)
+        wSMIobject = wSMI.data_
+        datawSMI1 = wSMI._reduce_to(reduction_func, target=target, picks=None)
+        
+        ###wSMI ###
+        wSMI = SymbolicMutualInformation(tmin=tmin, tmax=tmax, kernel=3, tau=2, backend="openmp",
+                     method_params=None, method='weighted', comment='default')
+        wSMI.fit(epochs)
+        wSMIobject = wSMI.data_
+        datawSMI2 = wSMI._reduce_to(reduction_func, target=target, picks=None)
+        
+        ###wSMI ###
+        wSMI = SymbolicMutualInformation(tmin=tmin, tmax=tmax, kernel=3, tau=4, backend="openmp",
+                     method_params=None, method='weighted', comment='default')
+        wSMI.fit(epochs)
+        wSMIobject = wSMI.data_
+        datawSMI4 = wSMI._reduce_to(reduction_func, target=target, picks=None)
+        
+        ###wSMI ###
+        wSMI = SymbolicMutualInformation(tmin=tmin, tmax=tmax, kernel=3, tau=8, backend="openmp",
+                     method_params=None, method='weighted', comment='default')
+        wSMI.fit(epochs)
+        wSMIobject = wSMI.data_
+        datawSMI8 = wSMI._reduce_to(reduction_func, target=target, picks=None)
         
         
         # =============================================================================
@@ -454,9 +507,9 @@ def all_markers(epochs, tmin, tmax, target):
         reduction_func = [{'axis': 'epochs', 'function': trim_mean80},
              {'axis': 'channels', 'function': np.mean}]
         
-        cnv.fit(epochs)
+        cnv.fit(epochs_erp)
         cnv_chs= ['AF3', 'AFz', 'AF4', 'F1', 'Fz', 'F2', 'FC1', 'FCz', 'FC2']
-        roi_cnv = np.array(mne.pick_channels(epochs.info['ch_names'], include=cnv_chs))
+        roi_cnv = np.array(mne.pick_channels(epochs_erp.info['ch_names'], include=cnv_chs))
         dataCNV = cnv._reduce_to(reduction_func, target=target, picks={
         'epochs': None,
         'channels': roi_cnv})
@@ -466,9 +519,9 @@ def all_markers(epochs, tmin, tmax, target):
          {'axis': 'channels', 'function': np.mean},
          {'axis': 'times', 'function': np.mean}]
         p1 = TimeLockedTopography(tmin=0.068, tmax=0.116, comment='p1')
-        p1.fit(epochs)
+        p1.fit(epochs_erp)
         p1_chs= ['AF3', 'AFz', 'AF4', 'F1', 'Fz', 'F2', 'FC1', 'FCz', 'FC2']
-        roi_p1 = np.array(mne.pick_channels(epochs.info['ch_names'], include=p1_chs))
+        roi_p1 = np.array(mne.pick_channels(epochs_erp.info['ch_names'], include=p1_chs))
         dataP1 = p1._reduce_to(reduction_func, target=target, picks={
         'epochs': None,
         'channels': roi_p1,
@@ -479,107 +532,102 @@ def all_markers(epochs, tmin, tmax, target):
         reduction_func = [{'axis': 'epochs', 'function': trim_mean80},
          {'axis': 'channels', 'function': np.mean},
          {'axis': 'times', 'function': np.mean}]
-        p3a.fit(epochs)
+        p3a.fit(epochs_erp)
         p3a_chs= ['AF3', 'AFz', 'AF4', 'F1', 'Fz', 'F2', 'FC1', 'FCz', 'FC2']
-        roi_p3a = np.array(mne.pick_channels(epochs.info['ch_names'], include=p3a_chs))
+        roi_p3a = np.array(mne.pick_channels(epochs_erp.info['ch_names'], include=p3a_chs))
         dataP3a= p3a._reduce_to(reduction_func, target=target, picks={
         'epochs': None,
         'channels': roi_p3a,
         'times':None})
         
         ###P3b###
-        p3b = TimeLockedTopography(tmin=0.4, tmax=0.6, comment='p3a')
+        p3b = TimeLockedTopography(tmin=0.4, tmax=0.6, comment='p3b')
         reduction_func = [{'axis': 'epochs', 'function': trim_mean80},
          {'axis': 'channels', 'function': np.mean},
          {'axis': 'times', 'function': np.mean}]
-        p3b.fit(epochs)
+        p3b.fit(epochs_erp)
         p3b_chs= ['FC1', 'FCz', 'FC2', 'C1', 'Cz','C2', 'CP1', 'CPz', 'CP2']
-        roi_p3b = np.array(mne.pick_channels(epochs.info['ch_names'], include=p3b_chs))
+        roi_p3b = np.array(mne.pick_channels(epochs_erp.info['ch_names'], include=p3b_chs))
         dataP3b= p3b._reduce_to(reduction_func, target=target, picks={
         'epochs': None,
         'channels': roi_p3b,
         'times':None})
         
         ###Dictionary with all the markers###
-        return {'wSMI':datawSMI, 'p_e':datap_e, 'k':datakomplexity, 'b':databeta,'b_n':databetaa_n, 'g':datagamma, 'g_n':datagamma_n, 't':datatheta,'t_n': datatheta_n , 'd':datadelta,
+        return {'wSMI_1':datawSMI1,'wSMI_2':datawSMI2,'wSMI_4':datawSMI4,'wSMI_8':datawSMI8, 'p_e_1':datap_e1,'p_e_2':datap_e2,'p_e_4':datap_e4,'p_e_8':datap_e8, 'k':datakomplexity, 'b':databeta,'b_n':databetaa_n, 'g':datagamma, 'g_n':datagamma_n, 't':datatheta,'t_n': datatheta_n , 'd':datadelta,
         'd_n':datadelta_n, 'a_n':dataalpha_n, 'a':dataalpha, 'CNV':dataCNV, 'P1':dataP1, 'P3a': dataP3a, 'P3b': dataP3b}
 
 
 
 def multivariate_classifier(
-    data, label, features, model, grid_search=False, plot = True, permutation=False, n_permutations = 1000
+    data, label, features, model ,pca = False, n_components = 3,  cv_splits = 5,grid_search=False,plot = True, permutation=False, n_permutations = 1000 
 ):
     """
     data: dataframe with features and labels
     label: name of the column with the labels for the classification
     features: feaure or list of features corresponding to the columns of the data frame with the markers
     model: type of classifier model
+    pca: if use pca as reduction
+    n_components: number of components of the pca
+    cv_splits: number of crossvalidations splits
     grid_search: if true it will apply grid search 5cv to find the best parameters of C and gamma, only for the SVM. Deafault: False
+    n_permutations: number of permutations
     """
-    if model == "SVM":
-        if grid_search == True:
-            y, lbl = pd.factorize(data[label])
-            X = data[features].astype("float32").values
+    #pipeline steps init
+    steps = [("scaler", StandardScaler())]
+    
+    if pca == True:
+        steps.append(('pca', PCA(n_components = n_components)))
+        
+    C= 0.001
+    gamma=0.1
+    
+    y, lbl = pd.factorize(data[label])
+    X = data[features].astype("float32").values
+        
+    if grid_search == True:
+ 
 
-            steps = [("scaler", StandardScaler()), ("SVM", SVC(probability=True))]
-            pipe = Pipeline(steps)
+        steps_grid = steps.copy()
+        steps_grid.append(("SVM", SVC(probability=True)))
+        pipe_grid = Pipeline(steps_grid)
 
-            parameteres = {
-                "SVM__C": [0.001, 0.1, 10, 100, 10e5],
-                "SVM__gamma": [0.1, 0.01],
-            }
-            grid = GridSearchCV(pipe, param_grid=parameteres, cv=5, n_jobs=-1)
-            grid.fit(X, y)
+        parameteres = {
+            "SVM__C": [0.001, 0.1, 10, 100, 10e5],
+            "SVM__gamma": [1,0.5, 0.1, 0.01, 0.001],
+        }
+        
+        grid = GridSearchCV(pipe_grid, param_grid=parameteres, cv=cv_splits, n_jobs=-1)
+        grid.fit(X, y)
+        
+        print(grid.best_params_)
+        
+        C=grid.best_params_["SVM__C"]
+        gamma=grid.best_params_["SVM__gamma"]
+        
 
-            steps = [
-                ("scaler", StandardScaler()),
-                (
-                    "SVM",
-                    SVC(
-                        C=grid.best_params_["SVM__C"],
-                        gamma=grid.best_params_["SVM__gamma"],
-                        probability=True,
-                    ),
-                ),
-            ]
-            pipe_cv = Pipeline(steps)
+    steps.append(('SVM', SVC(C = C, gamma = gamma, probability = True)))       
+            
+    pipe_cv = Pipeline(steps)
 
-            cv = StratifiedKFold(10, shuffle=True, random_state = 42)
+    cv = StratifiedKFold(cv_splits, shuffle=True, random_state = 42)
 
-            aucs = cross_val_score(
-                X=X,
-                y=y,
-                estimator=pipe_cv,
-                scoring="roc_auc",
-                cv=cv,
-            )
+    aucs = cross_val_score(
+        X=X,
+        y=y,
+        estimator=pipe_cv,
+        scoring="roc_auc",
+        cv=cv,
+    )
 
-            df_auc = pd.DataFrame(aucs, columns=["auc"])
+   
 
-        else:
-            y, lbl = pd.factorize(data[label])
-            X = data[features].astype("float32").values
+    df_auc = pd.DataFrame(aucs, columns=["auc"])
 
-            steps = [
-                ("scaler", StandardScaler()),
-                ("SVM", SVC(C=0.001, gamma=0.1, kernel="rbf", probability=True)),
-            ]
-            pipe_cv = Pipeline(steps)
 
-            cv = StratifiedKFold(10, shuffle=True, random_state = 42)
 
-            aucs = cross_val_score(
-                X=X,
-                y=y,
-                estimator=pipe_cv,
-                scoring="roc_auc",
-                cv=cv,
-            )
-
-            df_auc = pd.DataFrame(aucs, columns=["auc"])
-
-    if model == 'forest':
-        pass
+#     if model == 'forest':
+#         pass
     
     if plot == True:
         sns.catplot(x = 'auc', orient = 'h', data = df_auc, kind = 'violin')
@@ -589,12 +637,12 @@ def multivariate_classifier(
             
     if permutation == True:
         score, perm_scores, pvalue = permutation_test_score(
-            pipe_cv, X, y, scoring="roc_auc", cv=cv, n_permutations=1000, random_state = 42
+            pipe_cv, X, y, scoring="roc_auc", cv=cv, n_permutations=n_permutations, random_state = 42, n_jobs= -1
         )
             
 
         print(f"p_value = {pvalue}")
-
+        
         plt.hist(perm_scores, bins=20, density=True)
         plt.axvline(score, ls="--", color="r")
         score_label = (
@@ -658,6 +706,7 @@ def univariate_classifier(
                 scoring="roc_auc",
                 cv=cv,
             )
+            print(grid.best_params_)
 
         else:
 
@@ -686,11 +735,12 @@ def univariate_classifier(
             
     if permutation == True:
         score, perm_scores, pvalue = permutation_test_score(
-            pipe_cv, X, y, scoring="roc_auc", cv=cv, n_permutations=1000
+            pipe_cv, X, y, scoring="roc_auc", cv=cv, n_permutations=n_permutations, n_jobs =-1
         )
             
 
         print(f"p_value = {pvalue}")
+        
         
         if perm_plot == True:
 
@@ -704,7 +754,10 @@ def univariate_classifier(
             plt.ylabel("Probability")
             plt.show()
         
-    return aucs
+        return aucs, pvalue
+    else:
+        return aucs, 0
+    
 
 def bad_participant(epochs, probe, mind):
     df = epochs.to_data_frame()
