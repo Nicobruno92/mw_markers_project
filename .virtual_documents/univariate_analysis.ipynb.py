@@ -21,13 +21,45 @@ from sklearn.ensemble import ExtraTreesClassifier
 from scipy.stats import wilcoxon, mannwhitneyu
 
 
+# plotting parameters
+grey = "#21201F"
+green = "#9AC529"
+lblue = "#42B9B2"
+pink = "#DE237B"
+orange = "#F38A31"
+
+nt_colors = [green, lblue, pink, orange]
+
+plt.style.use("ggplot")
+fig_width = 8  # width in inches
+fig_height = 6  # height in inches
+fig_size = [fig_width, fig_height]
+plt.rcParams["figure.figsize"] = fig_size
+plt.rcParams["figure.autolayout"] = True
+
+sns.set(
+    style="white",
+    context="notebook",
+    font_scale=1.5,
+    rc={
+        "axes.labelcolor": grey,
+        "text.color": grey,
+        "axes.edgecolor": grey,
+        "xtick.color": grey,
+        "ytick.color": grey,
+    },
+)
+
+sns.set_palette(sns.color_palette(nt_colors))
+
+
 epoch_type = 'evoked'
 # epoch_type = 'pseudo-rs'
 
 all_participants = ['VP07','VP08','VP09', 'VP10','VP11','VP12','VP13','VP14','VP18','VP19','VP20','VP22','VP23','VP24','VP25','VP26','VP27','VP28','VP29','VP30','VP31','VP32','VP33','VP35','VP36','VP37']
 
-# path = '/media/nicolas.bruno/63f8a366-34b7-4896-a7ce-b5fb4ee78535/Nico/MW_eeg_data/minmarker/' #icm-linux
-path = '/Users/nicobruno/ownCloud/MW_eeg_data/minmarker/' #nico-mac
+path = '/media/nicolas.bruno/63f8a366-34b7-4896-a7ce-b5fb4ee78535/Nico/MW_eeg_data/minmarker/' #icm-linux
+# path = '/Users/nicobruno/ownCloud/MW_eeg_data/minmarker/' #nico-mac
 
 
 df = pd.DataFrame()
@@ -41,21 +73,29 @@ for i,v in enumerate(all_participants):
     df_['participant'] = i
     df = df.append(df_)
     
-df.to_csv('all_markers.csv')
+# df.to_csv('Data/all_markers.csv')
 
 
-df_markers = (df
+markers = ['wSMI_1', 'wSMI_2', 'wSMI_4', 'wSMI_8', 'p_e_1', 'p_e_2',
+       'p_e_4', 'p_e_8', 'k', 'b', 'b_n', 'g', 'g_n', 't', 't_n',
+       'd', 'd_n', 'a_n', 'a', 'CNV', 'P1', 'P3a', 'P3b']
+erps =['CNV', 'P1', 'P3a', 'P3b']
+
+
+df_subtracted = df.query("preproc == 'subtracted'").drop(columns = erps+['preproc'])
+df_erp = df.query("preproc == 'erp'").drop(columns = np.setdiff1d(markers,erps).tolist()+['preproc'])
+
+df_markers = df_subtracted.merge(df_erp, 'inner', on =np.setdiff1d(df_subtracted.columns, markers).tolist() )
+
+df_markers = (df_markers
               .query("stimuli == 'go'")
               .query("correct == 'correct'")
-              .query("preproc == 'subtracted'")
             .query('prev_trial <= 4')
-              .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events', 'preproc', 'epoch_type'], axis = 1)
+              .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events',  'epoch_type'], axis = 1)
               .query("mind in ['on-task','dMW', 'sMW']")
               .groupby(['segment', 'participant']).filter(lambda x: len(x) > 1)
              )
-
-markers = ['wSMI', 'p_e', 'k', 'b', 'b_n', 'g', 'g_n', 't', 't_n',
-       'd', 'd_n', 'a_n', 'a', 'CNV', 'P1', 'P3a', 'P3b']
+df_markers.to_csv('Data/all_markers.csv')
 
 
 df_mind = (
@@ -217,11 +257,12 @@ plt.show()
 
 
 AUC = pd.DataFrame()
+pvalues = pd.DataFrame()
 for i in df_mind.drop('mind2', axis = 1).columns:
     
 
-    AUC[i] =  univariate_classifier(
-    data= df_mind, label = 'mind2', feature = i, model = 'SVM', grid_search=False, permutation=True, n_permutations = 100
+    AUC[i], pvalues[i] =  univariate_classifier(
+    data= df_mind, label = 'mind2', feature = i, model = 'SVM', grid_search=True, permutation=True, n_permutations = 100
 )
 
     
@@ -229,36 +270,8 @@ sns.catplot(data = AUC, kind = 'box', orient = 'h')
 plt.axvline(x = 0.5, linestyle = 'dashed')
 plt.show()
 
-
-n_estimators = 2000
-AUC = pd.DataFrame()
-for i in df_mind.drop('mind2', axis = 1).columns:
-    
-    y, label = pd.factorize(df_mind['mind2'])
-    X = df_mind[i].astype('float32').values.reshape(-1,1)
-    
-    doc_forest = make_pipeline(
-        RobustScaler(),
-        ExtraTreesClassifier(
-            n_estimators=n_estimators, max_features=1, criterion='entropy',
-            max_depth=4, random_state=42, class_weight='balanced'))
-
-    cv = GroupShuffleSplit(n_splits=50, train_size=0.8, test_size=0.2,
-                           random_state=42)
-
-    aucs = cross_val_score(
-        X=X, y=y, estimator=doc_forest,
-        scoring='roc_auc', cv=cv, groups=np.arange(len(X)))
-
-    AUC[i] = aucs
-
-#     print(label)
-    print(f'AUC {i} = {np.mean(aucs)}')
-
-
-sns.catplot(data = AUC, kind = 'box', orient = 'h')
-plt.axvline(x = 0.5, linestyle = 'dashed')
-plt.show()
+AUC.to_csv('Data/segment_auc_ot_vs_mw.csv')
+pvalues.to_csv('Data/segment_pvalues_ot_vs_mw.csv')
 
 
 agg_dict = {k:['mean', 'std'] for k in markers }
@@ -300,17 +313,24 @@ plt.show()
 
 
 AUC = pd.DataFrame()
+pvalues = pd.DataFrame()
 for i in df_mw.drop('mind', axis = 1).columns:
     
 
-    AUC[i] =  univariate_classifier(
-    data= df_mw, label = 'mind', feature = i, model = 'SVM', grid_search=False, permutation=True, n_permutations = 100
+    AUC[i], pvalues[i] =  univariate_classifier(
+    data= df_mw, label = 'mind', feature = i, model = 'SVM', grid_search=True, permutation=True, n_permutations = 1000
 )
 
     
 sns.catplot(data = AUC, kind = 'box', orient = 'h')
 plt.axvline(x = 0.5, linestyle = 'dashed')
 plt.show()
+
+AUC.to_csv('Data/segment_auc_ot_vs_mw.csv')
+pvalues.to_csv('Data/segment_pvalues_ot_vs_mw.csv')
+
+
+AUC.to_csv('Data/segment_auc_dmw_vs_smw.csv')
 
 
 agg_dict = {k:'mean' for k in markers }

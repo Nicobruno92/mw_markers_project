@@ -14,6 +14,8 @@ from sklearn.model_selection import (
     permutation_test_score,
     StratifiedKFold
 )
+
+
 from sklearn.ensemble import ExtraTreesClassifier
 
 from utils import multivariate_classifier
@@ -68,54 +70,34 @@ for i, v in enumerate(all_participants):
     df_["participant"] = i
     df = df.append(df_)
 
-df.to_csv("all_markers.csv")
 
 
-df_markers = (
-    df
-#     .query("stimuli == 'go'")
-#     .query("correct == 'correct'")
-    .query("preproc == 'subtracted'")
-    .query("prev_trial <= 4")
-    .drop(
-        [
-            "stimuli",
-            "correct",
-            "prev_trial",
-            "label",
-            "events",
-            "preproc",
-            "epoch_type",
-        ],
-        axis=1,
-    )
-    .query("mind in ['on-task','dMW', 'sMW']")
-    .groupby(["segment", "participant"])
-    .filter(lambda x: len(x) > 1)
-)
 
-markers = [
-    "wSMI",
-    "p_e",
-    "k",
-    "b",
-    "b_n",
-    "g",
-    "g_n",
-    "t",
-    "t_n",
-    "d",
-    "d_n",
-    "a_n",
-    "a",
-    "CNV",
-    "P1",
-    "P3a",
-    "P3b",
-]
+markers = ['wSMI_1', 'wSMI_2', 'wSMI_4', 'wSMI_8', 'p_e_1', 'p_e_2',
+       'p_e_4', 'p_e_8', 'k', 'b', 'b_n', 'g', 'g_n', 't', 't_n',
+       'd', 'd_n', 'a_n', 'a', 'CNV', 'P1', 'P3a', 'P3b']
+erps =['CNV', 'P1', 'P3a', 'P3b']
 
 
-agg_dict = {k: ["mean", "std"] for k in markers}
+df_subtracted = df.query("preproc == 'subtracted'").drop(columns = erps+['preproc'])
+df_erp = df.query("preproc == 'erp'").drop(columns = np.setdiff1d(markers,erps).tolist()+['preproc'])
+
+df_markers = df_subtracted.merge(df_erp, 'inner', on =np.setdiff1d(df_subtracted.columns, markers).tolist() )
+
+df_markers = (df_markers
+              .query("stimuli == 'go'")
+              .query("correct == 'correct'")
+            .query('prev_trial <= 4')
+              .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events', 'epoch_type'], axis = 1)
+              .query("mind in ['on-task','dMW', 'sMW']")
+              .groupby(['segment', 'participant']).filter(lambda x: len(x) > 1)
+             )
+# df_markers.to_csv("all_markers.csv")
+
+
+variance = lambda x: np.std(x)/np.mean(x)
+
+agg_dict = {k: ["mean", 'std'] for k in markers}
 agg_dict.update({k: "first" for k in df_markers.drop(markers, axis=1).columns})
 
 df_mind = (
@@ -139,6 +121,7 @@ df_mind = df_mind.rename(
 ).drop(["participant", "probe", "mind", "segment"], axis=1)
 
 
+
 agg_dict = {k: "mean" for k in markers}
 agg_dict.update({k: "first" for k in df_markers.drop(markers, axis=1).columns})
 
@@ -154,7 +137,14 @@ df_mind = (
 )
 
 
-df_auc = multivariate_classifier(data = df_mind, label = 'mind2', features = df_mind.drop('mind2', axis = 1).columns, model = 'SVM', permutation = True, n_permutations = 1000)
+# df_mind = df_mind.drop(['wSMI_1', 'wSMI_2', 'wSMI_4', 'wSMI_8', 'p_e_1', 'p_e_2',
+#        'p_e_4', 'p_e_8',], axis = 1)
+
+
+df_auc = multivariate_classifier(data = df_mind, label = 'mind2', features = df_mind.drop('mind2', axis = 1).columns, 
+                                 model = 'SVM', pca =True, n_components = 20,
+                                 cv_splits= 10,grid_search = True, 
+                                 permutation = True, n_permutations = 1000)
 
 
 y, label = pd.factorize(df_mind['mind2'])
@@ -216,19 +206,10 @@ df_mw  = (df_mw
            )
 
 
-agg_dict = {k:'mean' for k in markers }
-agg_dict.update({k:'first' for k in df_markers.drop(markers, axis=1).columns})
-
-df_mw = (
-    df_markers
-    .query("probe == 'SC'")
-    .query("mind get_ipython().getoutput("= 'on-task'")")
-    .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
-    .drop(['participant', 'probe', 'segment'], axis = 1)
-)
-
-
-df_auc = multivariate_classifier(data = df_mw, label = 'mind', features =  df_mw.drop('mind', axis = 1).columns, model = 'SVM', grid_search = False, plot = True, permutation = True, n_permutations = 1000)
+df_auc = multivariate_classifier(data = df_mw, label = 'mind', features = df_mw.drop('mind', axis = 1).columns, 
+                                 model = 'SVM', pca =True, n_components = 20,
+                                 cv_splits= 10,grid_search = True, 
+                                 permutation = True, n_permutations = 1000)
 
 
 y, label = pd.factorize(df_mw['mind'])
@@ -284,7 +265,10 @@ df_mind = (
 )
 
 
-df_auc = multivariate_classifier(data = df_mind, label = 'mind2', features = df_mind.drop('mind2', axis = 1).columns, model = 'SVM', permutation = True, n_permutations = 1000)
+df_auc = multivariate_classifier(data = df_mind, label = 'mind2', features = df_mind.drop('mind2', axis = 1).columns, 
+                                 model = 'SVM', pca =False, n_components = 10,
+                                 cv_splits= 10,grid_search = True, 
+                                 permutation = True, n_permutations = 1000)
 
 
 y, label = pd.factorize(df_mind['mind2'])
@@ -338,7 +322,7 @@ df_mw = (
 )
 
 
-df_auc = multivariate_classifier(data = df_mw, label = 'mind', features =  df_mw.drop('mind', axis = 1).columns, model = 'SVM', grid_search = False, plot = True, permutation = True, n_permutations = 1000)
+df_auc = multivariate_classifier(data = df_mw, label = 'mind', features =  df_mw.drop('mind', axis = 1).columns, model = 'SVM', grid_search = True, plot = True, permutation = True, n_permutations = 1000)
 
 
 y, label = pd.factorize(df_mw['mind'])
