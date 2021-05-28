@@ -339,9 +339,8 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         
         Evoked markers have already defined times
         """
-        if epochs_erp == None:
+        if epochs_erp ==None:
             epochs_erp = epochs
-        
         
         from scipy.stats import trim_mean
         
@@ -419,12 +418,44 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         beta = PowerSpectralDensity(estimator=base_psd, fmin=13., fmax=30,normalize=False, comment='beta')
         beta.fit(epochs)
         databeta = beta._reduce_to(reduction_func, target=target, picks=None)
-
+        
+        
+        
+        #Spectral Entropy
+        se = PowerSpectralDensity(estimator=base_psd, fmin=1., fmax=45.,
+                         normalize=False, comment='summary_se')
+        se.fit(epochs)
+        datase = se._reduce_to(reduction_func, target=target, picks=None)
+        
+        
+        #### Spectral Summary ####
+        
+        reduction_func= [{'axis': 'channels', 'function': np.mean},
+             {'axis': 'epochs', 'function': trim_mean80}]
+        
+        # msf
+        msf = PowerSpectralDensitySummary(estimator=base_psd, fmin=1., fmax=45.,
+                                percentile=.5, comment='summary_msf')
+        msf.fit(epochs)
+        datamsf = msf._reduce_to(reduction_func, target=target, picks=None)
+        
+        #sef90
+        sef90 = PowerSpectralDensitySummary(estimator=base_psd, fmin=1., fmax=45.,
+                                percentile=.9, comment='summary_sef90')
+        sef90.fit(epochs)
+        datasef90 = sef90._reduce_to(reduction_func, target=target, picks=None)
+        
+        #sef95
+        sef95 = PowerSpectralDensitySummary(estimator=base_psd, fmin=1., fmax=45.,
+                                percentile=.95, comment='summary_sef95')
+        sef95.fit(epochs)
+        datasef95 = sef95._reduce_to(reduction_func, target=target, picks=None)
 
         # =============================================================================
         # INFORMATION THEORY MARKERS
         # =============================================================================
-
+        
+        ### Kolgomorov complexity ###
         komplexity = KolmogorovComplexity(tmin=tmin, tmax=tmax, backend='openmp')
         komplexity.fit(epochs)
         komplexityobject=komplexity.data_ ###Object to save, number of channels*number of epochs, it's ndarray
@@ -554,8 +585,14 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         'times':None})
         
         ###Dictionary with all the markers###
-        return {'wSMI_1':datawSMI1,'wSMI_2':datawSMI2,'wSMI_4':datawSMI4,'wSMI_8':datawSMI8, 'p_e_1':datap_e1,'p_e_2':datap_e2,'p_e_4':datap_e4,'p_e_8':datap_e8, 'k':datakomplexity, 'b':databeta,'b_n':databetaa_n, 'g':datagamma, 'g_n':datagamma_n, 't':datatheta,'t_n': datatheta_n , 'd':datadelta,
-        'd_n':datadelta_n, 'a_n':dataalpha_n, 'a':dataalpha, 'CNV':dataCNV, 'P1':dataP1, 'P3a': dataP3a, 'P3b': dataP3b}
+        return {'wSMI_1':datawSMI1,'wSMI_2':datawSMI2,'wSMI_4':datawSMI4,'wSMI_8':datawSMI8, 
+                'p_e_1':datap_e1,'p_e_2':datap_e2,'p_e_4':datap_e4,'p_e_8':datap_e8, 
+                'k':datakomplexity, 'se':datase,
+                'msf': datamsf, 'sef90':datasef90, 'sef95':datasef95,
+                'b':databeta,'b_n':databetaa_n, 'g':datagamma, 'g_n':datagamma_n, 
+                't':datatheta,'t_n': datatheta_n , 'd':datadelta, 'd_n':datadelta_n, 
+                'a_n':dataalpha_n, 'a':dataalpha, 
+                'CNV':dataCNV, 'P1':dataP1, 'P3a': dataP3a, 'P3b': dataP3b}
 
 
 
@@ -566,7 +603,7 @@ def multivariate_classifier(
     data: dataframe with features and labels
     label: name of the column with the labels for the classification
     features: feaure or list of features corresponding to the columns of the data frame with the markers
-    model: type of classifier model
+    model: type of classifier model {SVM or forest}
     pca: if use pca as reduction
     n_components: number of components of the pca
     cv_splits: number of crossvalidations splits
@@ -605,34 +642,59 @@ def multivariate_classifier(
         C=grid.best_params_["SVM__C"]
         gamma=grid.best_params_["SVM__gamma"]
         
+    if model == 'SVM':
+        steps.append(('SVM', SVC(C = C, gamma = gamma, probability = True)))       
 
-    steps.append(('SVM', SVC(C = C, gamma = gamma, probability = True)))       
-            
-    pipe_cv = Pipeline(steps)
+        pipe_cv = Pipeline(steps)
 
-    cv = StratifiedKFold(cv_splits, shuffle=True, random_state = 42)
+        cv = StratifiedKFold(cv_splits, shuffle=True, random_state = 42)
 
-    aucs = cross_val_score(
-        X=X,
-        y=y,
-        estimator=pipe_cv,
-        scoring="roc_auc",
-        cv=cv,
-    )
+        aucs = cross_val_score(
+            X=X,
+            y=y,
+            estimator=pipe_cv,
+            scoring="roc_auc",
+            cv=cv,
+        )
 
-   
+  
+    if model == 'forest':
+        n_estimators = 1000
+        steps.append(('Forest',ExtraTreesClassifier(
+                n_estimators=n_estimators, max_features='auto', criterion='entropy',
+                max_depth=None, random_state=42, class_weight=None)))
+        
+        pipe_cv = Pipeline(steps)
+        
+        cv = StratifiedKFold(cv_splits, shuffle=True, random_state = 42)
 
+
+        aucs = cross_val_score(
+            X=X, y=y, estimator=pipe_cv,
+            scoring='roc_auc', cv=cv, groups=np.arange(len(X)), n_jobs = -1)
+        
+    
     df_auc = pd.DataFrame(aucs, columns=["auc"])
-
-
-
-#     if model == 'forest':
-#         pass
+    
     
     if plot == True:
         sns.catplot(x = 'auc', orient = 'h', data = df_auc, kind = 'violin')
         plt.title(f'Mean = {np.mean(df_auc.auc)}; SD = {np.std(df_auc.auc)}')
         plt.axvline(x = 0.5, linestyle = 'dashed')
+        plt.show()
+        
+     
+    # Feature importance
+    if model == 'forest':
+        pipe_cv.fit(X, y)
+        variable_importance = pipe_cv.steps[-1][-1].feature_importances_
+        sorter = variable_importance.argsort()
+
+        feat_import = pd.DataFrame(np.array([features,variable_importance]).T, 
+                                   columns = ['features', 'value']).sort_values('value', ascending = False)
+        
+        sns.scatterplot(x = feat_import.value, y =feat_import.features)
+        plt.title(f'AUC = {np.mean(df_auc.auc)}')
         plt.show()
             
     if permutation == True:
@@ -653,7 +715,7 @@ def multivariate_classifier(
         plt.ylabel("Probability")
         plt.show()
         
-
+    
 
     return df_auc
 
@@ -727,11 +789,28 @@ def univariate_classifier(
                 cv=cv,
             )
             
-    print(f'AUC {feature} = {np.mean(aucs)}')
 
     if model == 'forest':
-        pass
+            steps = [
+            ("scaler", StandardScaler()),
+                       ]
+            n_estimators = 1000
+            steps.append(('Forest',ExtraTreesClassifier(
+                n_estimators=n_estimators, max_features='auto', criterion='entropy',
+                max_depth=None, random_state=42, class_weight=None)))
+            pipe_cv = Pipeline(steps)
 
+            cv = StratifiedKFold(10, shuffle=True, random_state = 42)
+
+            aucs = cross_val_score(
+                X=X,
+                y=y,
+                estimator=pipe_cv,
+                scoring="roc_auc",
+                cv=cv,
+            )
+
+    print(f'AUC {feature} = {np.mean(aucs)}')
             
     if permutation == True:
         score, perm_scores, pvalue = permutation_test_score(
