@@ -65,10 +65,12 @@ def make_str_label(label):
     elif label[3] == '0':
         str_label += 'incorrect'
     str_label += '/'
-
+    
+    #trial num
     str_label += label[4]
     str_label += '/'
-
+    
+    #segment num
     str_label += f's{label[5:]}'
 
 
