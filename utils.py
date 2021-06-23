@@ -14,7 +14,8 @@ from sklearn.model_selection import (
     cross_val_score,
     GroupShuffleSplit,
     permutation_test_score,
-    StratifiedKFold
+    StratifiedKFold,
+    KFold
 )
 
 from sklearn.decomposition import PCA
@@ -22,7 +23,7 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import ExtraTreesClassifier
 
 
-from nice.markers import (KolmogorovComplexity, TimeLockedContrast, PowerSpectralDensityEstimator, 
+from nice.markers import (KolmogorovComplexity, TimeLockedContrast, PowerSpectralDensityEstimator, PowerSpectralDensitySummary,
                           PowerSpectralDensity, SymbolicMutualInformation, PermutationEntropy, TimeLockedTopography, ContingentNegativeVariation)
 import pycsd
 
@@ -649,7 +650,7 @@ def multivariate_classifier(
 
         pipe_cv = Pipeline(steps)
 
-        cv = StratifiedKFold(cv_splits, shuffle=True, random_state = 42)
+        cv = KFold(cv_splits, shuffle=True, random_state = 42)
 
         aucs = cross_val_score(
             X=X,
@@ -668,7 +669,7 @@ def multivariate_classifier(
         
         pipe_cv = Pipeline(steps)
         
-        cv = StratifiedKFold(cv_splits, shuffle=True, random_state = 42)
+        cv = KFold(cv_splits, shuffle=True, random_state = 42)
 
 
         aucs = cross_val_score(
