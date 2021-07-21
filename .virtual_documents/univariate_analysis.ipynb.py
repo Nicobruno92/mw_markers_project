@@ -1,8 +1,9 @@
-from utils import balance_sample, univariate_classifier
+from utils import balance_sample, univariate_classifier, bad_participant, correct_name_markers
 
 import numpy as np
-import seaborn as sns
 import pandas as pd 
+
+import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as pgo
@@ -28,10 +29,12 @@ from sklearn.model_selection import (
 from sklearn.ensemble import ExtraTreesClassifier
 
 from imblearn.under_sampling import RandomUnderSampler
-from imblearn.over_sampling import RandomOverSampler
+from imblearn.over_sampling import RandomOverSampler, SMOTE
 
 from scipy.stats import wilcoxon, mannwhitneyu
 from statsmodels.stats.multitest import multipletests
+
+import mne
 
 
 # plotting parameters
@@ -72,8 +75,12 @@ epoch_type = 'evoked'
 
 all_participants = ['VP07','VP08','VP09', 'VP10','VP11','VP12','VP13','VP14','VP18','VP19','VP20','VP22','VP23','VP24','VP25','VP26','VP27','VP28','VP29','VP30','VP31','VP32','VP33','VP35','VP36','VP37']
 
-path = '/media/nicolas.bruno/63f8a366-34b7-4896-a7ce-b5fb4ee78535/Nico/MW_eeg_data/minmarker/' #icm-linux
-# path = '/Users/nicobruno/ownCloud/MW_eeg_data/minmarker/' #nico-mac
+# path = '/media/nicolas.bruno/63f8a366-34b7-4896-a7ce-b5fb4ee78535/Nico/MW_eeg_data/minmarker/' #icm-linux
+path = '/Users/nicobruno/ownCloud/MW_eeg_data/minmarker/' #nico-mac
+
+
+good_participants = all_participants[1:2] +  all_participants[6:10] +  all_participants[12:15]  + all_participants[18:23] + [all_participants[25]]
+len(good_participants)
 
 
 df = pd.DataFrame()
@@ -84,150 +91,44 @@ for i,v in enumerate(all_participants):
     folder = path + participant +'/'
     
     df_ = pd.read_csv(folder+ participant + '_' + epoch_type + '_all_marker.csv', index_col = 0)
+#     df_ = pd.read_csv(folder+ participant + '_' + epoch_type + 'noica_all_marker.csv', index_col = 0)
     df_['participant'] = i
-    df = df.append(df_)
+    df = df.append(df_) 
     
 # df.to_csv('Data/all_markers.csv')
+# df = correct_name_markers(df)
 
 
 markers = ['wSMI_1', 'wSMI_2', 'wSMI_4', 'wSMI_8', 'p_e_1', 'p_e_2',
        'p_e_4', 'p_e_8', 'k', 'se','msf', 'sef90', 'sef95', 'b', 'b_n', 'g',
-       'g_n', 't', 't_n', 'd', 'd_n', 'a_n', 'a', 'CNV', 'P1', 'P3a', 'P3b']
+       'g_n', 't', 't_n', 'd', 'd_n', 'a_n', 'a', 'CNV', 'P1', 'P3a', 'P3b',]
+#           'ft', 'ft_n']
 erps =['CNV', 'P1', 'P3a', 'P3b']
+# erps = [r'$CNV$', r'$P1$', r'$P3a$',r'$P3b$']
+
+# markers =  [r'$\delta$',r'$|\delta|$',r'$\theta$', r'$|\theta|$',r'$\alpha$', r'$|\alpha|$',r'$\beta$', r'$|\beta|$',r'$\gamma$', r'$|\gamma|$',
+#             r'$PE\gamma$',r'$PE\beta$',r'$PE\alpha$',r'$PE\theta$',
+#             r'$wSMI\gamma$',r'$wSMI\beta$',r'$wSMI\alpha$',r'$wSMI\theta$', 
+#             r'$K$',r'$SE$',r'$MSF$', r'$SEF90$', r'$SEF95$', 
+#             r'$CNV$', r'$P1$', r'$P3a$',r'$P3b$'
+#            ]
 
 
-df_subtracted = df.query("preproc == 'subtracted'").drop(columns = erps+['preproc'])
-df_erp = df.query("preproc == 'erp'").drop(columns = np.setdiff1d(markers,erps).tolist()+['preproc'])
+# df_subtracted = df.query("preproc == 'subtracted'").drop(columns = erps+['preproc'])
+# df_erp = df.query("preproc == 'erp'").drop(columns = np.setdiff1d(markers,erps).tolist()+['preproc'])
 
-df_markers = df_subtracted.merge(df_erp, 'inner', on =np.setdiff1d(df_subtracted.columns, markers).tolist() )
+# df_markers = df_subtracted.merge(df_erp, 'inner', on =np.setdiff1d(df_subtracted.columns, markers).tolist() )
 
-df_markers = (df_markers
+df_markers = (df
               .query("stimuli == 'go'")
               .query("correct == 'correct'")
-            .query('prev_trial <= 4')
-              .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events',  'epoch_type'], axis = 1)
+            .query('prev_trial < 5')
+              .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events',  'epoch_type', 'preproc', 'ft', 'ft_n'], axis = 1)
               .query("mind in ['on-task','dMW', 'sMW']")
               .groupby(['segment', 'participant']).filter(lambda x: len(x) > 1)
              )
 
 df_markers.to_csv('Data/all_markers.csv')
-
-
-df_mind = (
-    df_markers
-    .query("probe == 'PC'")
-    .assign(
-    mind2 = lambda df: np.where(df.mind == 'on-task', 'on-task', 'mw'))
-    .groupby(['mind2', 'participant']).filter(lambda x: len(x) > 7) #min nbr of trials
-)
-
-agg_dict = {k:['mean', 'std'] for k in markers }
-agg_dict.update({k:'first' for k in df_mind.drop(markers, axis=1).columns})
-
-df_mind = (df_mind
-    .groupby(['mind2', 'participant'], as_index = False).agg(agg_dict)
-#     .query("mind get_ipython().getoutput("= 'sMW'") #if you want to test against just one of the mw")
-)
-
-df_mind.columns = df_mind.columns.map("_".join)
-df_mind  = df_mind.rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment', 'mind2_first':'mind2'})
-df_mind = balance_sample(df_mind, 'participant', 'mind2', levels = 2).drop(['participant', 'probe', 'mind', 'segment'], axis = 1) # drop mind or mind2 also
-
-
-AUC = []
-significants = []
-
-for i in df_mind.drop('mind2', axis = 1).columns:
-    ot = df_mind.query("mind2 == 'on-task'")[i]
-    mw = df_mind.query("mind2 == 'mw'")[i]
-    auc = roc_auc_score(df_mind['mind2'], df_mind[i])
-    print(f'AUC {i} = {auc}', f'{wilcoxon(x = ot, y = mw)}')
-    AUC.append([i, auc])
-    if mannwhitneyu(x = ot, y = mw).pvalue < 0.05:
-        significants.append(i)
-
-print(f'List of significant markers: {significants}')
-
-subject_mind_roc = pd.DataFrame(AUC, columns = ['marker', 'AUC'])
-
-sns.catplot(x = 'AUC', y = 'marker', data = subject_mind_roc, orient = 'h')
-plt.axvline(x = 0.5, linestyle = 'dashed')
-plt.show()
-
-
-AUC = []
-for i in df_mind.drop('mind2', axis = 1).columns:
-    y, label = pd.factorize(df_mind['mind2'])
-    X = df_mind[i].astype('float32').values.reshape(-1,1)
-    svc = SVC(probability=True)
-    svc.fit(X, y)
-    y_proba = svc.predict_proba(X)
-    auc = roc_auc_score(y, y_proba[:,0])
-    print(f'AUC {i} = {auc}')
-    AUC.append([i, auc])
-
-print(label)
-df_auc = pd.DataFrame(AUC, columns = ['marker', 'AUC'])
-
-sns.catplot(x = 'AUC', y = 'marker', data = df_auc, orient = 'h')
-plt.axvline(x = 0.5, linestyle = 'dashed')
-plt.show()
-
-
-df_mw = (
-    df_markers
-    .query("probe == 'SC'")
-    .query("mind get_ipython().getoutput("= 'on-task'")")
-    .groupby(['mind', 'participant']).filter(lambda x: len(x) > 7) #min nbr of trials
-)
-
-agg_dict = {k:'mean' for k in markers }
-agg_dict.update({k:'first' for k in df_mw.drop(markers, axis=1).columns})
-
-df_mw = (df_mw
-    .groupby(['mind', 'participant'], as_index = False).agg(agg_dict)
-)
-df_mw = balance_sample(df_mw, 'participant', 'mind', levels = 2).drop(['participant', 'probe','segment'], axis = 1) 
-
-
-
-AUC = []
-significants = []
-for i in df_mw.drop('mind', axis = 1).columns:
-    smw = df_mw.query("mind == 'sMW'")[i]
-    dmw = df_mw.query("mind == 'dMW'")[i]
-    auc = roc_auc_score(df_mw['mind'], df_mw[i])
-    print(f'AUC {i} = {auc}', f'{wilcoxon(x = smw, y = dmw)}')
-    AUC.append([i, auc])
-    if mannwhitneyu(x = smw, y = dmw).pvalue < 0.05:
-        significants.append(i)
-subject_mw_roc = pd.DataFrame(AUC, columns = ['marker', 'AUC'])
-
-print(f'List of significant markers: {significants}')
-
-
-sns.catplot(x = 'AUC', y = 'marker', data = subject_mw_roc, orient = 'h')
-plt.axvline(x = 0.5, linestyle = 'dashed')
-plt.show()
-
-
-AUC = []
-for i in df_mw.drop('mind', axis = 1).columns:
-    y, label = pd.factorize(df_mw['mind'])
-    X = df_mw[i].astype('float32').values.reshape(-1,1)
-    svc = SVC(probability=True)
-    svc.fit(X, y)
-    y_proba = svc.predict_proba(X)
-    auc = roc_auc_score(y, y_proba[:,0])
-    print(f'AUC {i} = {auc}')
-    AUC.append([i, auc])
-
-print(label)
-df_auc = pd.DataFrame(AUC, columns = ['marker', 'AUC'])
-
-sns.catplot(x = 'AUC', y = 'marker', data = df_auc, orient = 'h')
-plt.axvline(x = 0.5, linestyle = 'dashed')
-plt.show()
 
 
 agg_dict = {k:['mean', 'std'] for k in markers }
@@ -241,13 +142,29 @@ df_mind = (
     mind2 = lambda df: np.where(df.mind == 'on-task', 'on-task', 'mw'))
 )
 
+#### Use normal names###
+
 df_mind.columns = df_mind.columns.map("_".join)
 
 df_mind  = (df_mind
             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment', 'mind2_':'mind2'})
-            .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
+#             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
             .drop(['participant', 'probe', 'mind', 'segment'], axis = 1) 
            )
+
+
+#### Use latex command for nmaes###
+##it slow downs the computer, just for final figures.
+
+# df_mind = correct_name_markers(df_mind)
+
+# df_mind.columns = df_mind.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
+
+# df_mind  = (df_mind
+#             .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment', 'mind2$_{}$':'mind2'})
+# #             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
+#             .drop(['participant', 'probe', 'mind', 'segment'], axis = 1) 
+#            )
 
 
 AUC = []
@@ -274,49 +191,23 @@ segment_mind_roc = (segment_mind_roc
 segment_mind_roc.to_csv('Data/univariate_roc_mind_segment.csv')
 
 
-AUC = []
-pvalues = {}
-for i in df_mind.drop('mind2', axis = 1).columns:
-    rus = RandomUnderSampler(random_state=42)# fit predictor and target variable
-
-    mind_rus = rus.fit_resample(df_mind[i].astype("float32").values.reshape(-1,1), df_mind.mind2)
-
-    df_mind_rus = pd.DataFrame(mind_rus[0], columns =['marker']).assign(mind = mind_rus[1])
-    ot = df_mind_rus.query("mind == 'on-task'")['marker']
-    mw = df_mind_rus.query("mind == 'mw'")['marker']
-    auc = roc_auc_score(df_mind_rus['mind'], df_mind_rus['marker'])
-    print(f'AUC {i} = {auc}', f'{mannwhitneyu(x = ot, y = mw)}')
-    AUC.append([i, auc])
-    pvalues[i] = mannwhitneyu(x = ot, y =mw).pvalue 
-        
-segment_mind_roc = pd.DataFrame(AUC, columns = ['markers', 'AUC'])
-
-p_df =pd.DataFrame.from_dict(pvalues, orient = 'index', columns = ['p_value']).reset_index().rename(columns ={'index': 'markers'})
-segment_mind_roc = (segment_mind_roc
-            .merge(p_df, on = 'markers', how = 'inner')
-            .assign(
-                    p_corrected = lambda df: multipletests(df.p_value, method = 'fdr_bh')[1],
-                    significant = lambda df: np.select([(df.p_value < 0.05) & (df.p_corrected < 0.05), (df.p_value < 0.05) & (df.p_corrected > 0.05),  
-                                                 (df.p_value > 0.05) & (df.p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05'])
-                   )
-           )
-segment_mind_roc.to_csv('Data/univariate_roc_mind_segment.csv')
-
-
 segment_mind_roc = pd.read_csv('Data/univariate_roc_mind_segment.csv')
 fig = px.scatter(segment_mind_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
                  symbol_sequence = ['circle-open','circle','hexagram' ],
 #                  color = 'significant',
                  color_discrete_sequence = [pink, green,orange, pink], 
                  
-                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']})
+                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
+                 labels = {'AUC': 'MW>OT                                             MW<OT'}
+                )
 fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
 fig.update_traces(marker=dict(size = 8))
 
 fig.update_layout(
     autosize=False,
     width=800,
-    height=800,
+    height=1000,
+    xaxis= {'range': (0.34, 0.66)},
     yaxis = {
             'showticklabels': True,
             'tickmode': 'linear',
@@ -324,51 +215,8 @@ fig.update_layout(
     
 )
 fig.show()
-pio.write_json(fig, 'Figs/univariate_roc_mw_segment.plotly')
+# pio.write_json(fig, 'Figs/univariate_roc_mw_segment.plotly')
 # fig.write_image('Figs/univariate_roc_mw_segment.png')
-
-
-AUC = pd.DataFrame()
-pvalues = {}
-for i in df_mind.drop('mind2', axis = 1).columns:
-    
-
-    AUC[i], pvalues[i] =  univariate_classifier(
-    data= df_mind, label = 'mind2', feature = i, model = 'SVM', grid_search=False, permutation=True, n_permutations = 1000
-)
-
-    
-sns.catplot(data = AUC, kind = 'box', orient = 'h')
-plt.axvline(x = 0.5, linestyle = 'dashed')
-plt.show()
-
-p_df =pd.DataFrame.from_dict(pvalues, orient = 'index', columns = ['p_value']).reset_index().rename(columns ={'index': 'markers'})
-svc_mind = (AUC.reset_index().melt(id_vars = ['index'], var_name = 'markers', value_name = 'AUC')
-            .drop('index', axis = 1)
-            .merge(p_df, on = 'markers', how = 'inner')
-            .assign(p_corrected = lambda df: multipletests(df.p_value, method = 'fdr_bh')[1],
-                    significant = lambda df: np.select([(df.p_value < 0.05) & (df.p_corrected < 0.05), (df.p_value < 0.05) & (df.p_corrected > 0.05),  
-                                                 (df.p_value > 0.05) & (df.p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']))
-           )
-svc_mind.to_csv('Data/univariate_svc_mind_segment.csv')
-
-
-svc_mind = pd.read_csv('Data/univariate_svc_mind_segment.csv')
-
-fig = px.box(svc_mind, y="markers", x="AUC", color="significant", template = "plotly_white", color_discrete_sequence = [green, orange])
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
-
-fig.update_layout(
-    autosize=False,
-    width=800,
-    height=800,
-    yaxis = {
-            'showticklabels': True,
-            'tickmode': 'linear',
-        }
-)
-fig.show()
-pio.write_json(fig, 'Figs/univariate_svc_mind_segment.plotly')
 
 
 agg_dict = {k:['mean', 'std'] for k in markers }
@@ -381,20 +229,36 @@ df_mw = (
     .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
 )
 
-df_mw.columns = df_mw.columns.map("_".join)
+# df_mw.columns = df_mw.columns.map("_".join)
+
+# df_mw  = (df_mw
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
+#             .drop(['participant', 'probe', 'segment'], axis = 1) 
+#            )
+
+
+#### Use latex command for nmaes###
+####it slow downs the computer, just for final figures.
+
+df_mw = correct_name_markers(df_mw)
+
+df_mw.columns = df_mw.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
 
 df_mw  = (df_mw
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
-            .drop(['participant', 'probe', 'segment'], axis = 1) 
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment', 'mind$_{}$':'mind'})
+#             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw   ")
+            .drop(['participant', 'probe',  'segment'], axis = 1)
+
            )
 
 
 AUC = []
 pvalues = {}
 for i in df_mw.drop('mind', axis = 1).columns:
+    df_mw = df_mw.assign(mind_order = lambda df: np.select([df.mind == 'dMW', df.mind == 'sMW'], [2,1]))
     smw = df_mw.query("mind == 'sMW'")[i]
     dmw = df_mw.query("mind == 'dMW'")[i]
-    auc = roc_auc_score(df_mw['mind'], df_mw[i])
+    auc = roc_auc_score(df_mw['mind_order'], df_mw[i])
     print(f'AUC {i} = {auc}', f'{mannwhitneyu(x = smw, y = dmw)}')
     AUC.append([i, auc])
     pvalues[i] = mannwhitneyu(x = smw, y =dmw).pvalue 
@@ -414,20 +278,36 @@ segment_mw_roc = (segment_mw_roc
 segment_mw_roc.to_csv('Data/univariate_roc_mw_segment.csv')
 
 
+df_agg = df_mw.melt(id_vars=['mind'], var_name = 'markers', value_name = 'value').groupby(['markers','mind'], as_index = False).agg(['mean','std'], axis = 0).reset_index()
+df_agg.columns = df_agg.columns.map(''.join)
+
+df_mw_final = (df_agg.merge(segment_mw_roc, on = 'markers', how= 'inner')
+                 .drop(['significant'], axis =1)
+#                  .assign(mind = lambda df: df.mind.str.replace('d', 'MW').replace('on-task','OT'))
+                )
+
+                                                                                 
+print(df_mw_final.to_latex(header = True, index= False, float_format="{:0.3f}".format, escape = False, longtable=True))
+
+
 segment_mw_roc = pd.read_csv('Data/univariate_roc_mw_segment.csv')
+
 fig = px.scatter(segment_mw_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
                  symbol_sequence = ['circle-open','circle','hexagram' ],
 #                  color = 'significant',
                  color_discrete_sequence = [lblue, green,orange, pink], 
                  
-                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']})
+                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
+                 labels = {'AUC': 'sMW>dMW                                          sMW<dMW'}
+                )
 fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
-
 fig.update_traces(marker=dict(size = 8))
+
 fig.update_layout(
     autosize=False,
     width=800,
-    height=800,
+    height=1000,
+    xaxis= {'range': (0.35, 0.65)},
     yaxis = {
             'showticklabels': True,
             'tickmode': 'linear',
@@ -498,6 +378,12 @@ df_probe  = (df_probe
            )
 
 
+df_probe.groupby('probe').count()
+
+
+sns.displot(x = 't_n_mean', data= df_probe, hue = 'probe', kind = 'kde')
+
+
 sc = df_probe[df_probe.probe == 'SC']
 pc = df_probe[df_probe.probe == 'PC']
 print(f'SC {len(sc)}, PC: {len(pc)}')
@@ -533,10 +419,38 @@ probe_roc = (probe_roc
 probe_roc.to_csv('Data/univariate_roc_probe.csv')
 
 
+probe_roc = pd.read_csv('Data/univariate_roc_probe.csv')
+fig = px.scatter(probe_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
+                 symbol_sequence = ['circle-open','circle','hexagram' ],
+#                  color = 'significant',
+                 color_discrete_sequence = [orange, pink], 
+                 
+                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
+                 labels = {'AUC': 'MW>OT                                             MW<OT'}
+                )
+fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
+fig.update_traces(marker=dict(size = 8))
+
+fig.update_layout(
+    autosize=False,
+    width=800,
+    height=800,
+    xaxis= {'range': (0.35, 0.65)},
+    yaxis = {
+            'showticklabels': True,
+            'tickmode': 'linear',
+        }
+    
+)
+fig.show()
+pio.write_json(fig, 'Figs/univariate_roc_probe.plotly')
+# fig.write_image('Figs/univariate_roc_mw_segment.png')
+
+
 AUC = []
 pvalues = {}
 for i in df_probe.drop('probe', axis = 1).columns:
-    ros = RandomOverSampler(random_state=42)# fit predictor and target variable
+    ros = SMOTE(random_state=42)# fit predictor and target variable
 
     probe_ros = ros.fit_resample(df_probe[i].astype("float32").values.reshape(-1,1), df_probe.probe)
 
@@ -568,7 +482,7 @@ probe_roc = pd.read_csv('Data/univariate_roc_probe.csv')
 fig = px.scatter(probe_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
                  symbol_sequence = ['circle-open','circle','hexagram' ],
 #                  color = 'significant',
-                 color_discrete_sequence = [lblue, green,orange, pink], 
+                 color_discrete_sequence = [orange], 
                  
                  category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']})
 fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")

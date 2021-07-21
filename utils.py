@@ -955,3 +955,34 @@ def correct_name_markers(df):
     
 })
     return df
+
+
+def plot_univariate(df, label, color = 'green', contrast = None):
+    
+    if contrast is not None:
+        df = df.query(f"comparison == '{contrast}'")
+
+    fig = px.scatter(df.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white",
+                     symbol = 'significant', symbol_sequence = ['circle-open','circle','hexagram' ], color_discrete_sequence = [color],
+
+                     category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']}, 
+                     labels = {'AUC': f'{label[0]}>{label[1]}                  {label[0]}<{label[1]}'}
+
+                    )
+
+    fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
+    fig.update_traces(marker=dict(size = 8))
+
+    fig.update_layout(
+        autosize=False,
+        width=800,
+        height=1000,
+        xaxis= {'range': (0.34, 0.66)},
+        yaxis = {
+                'showticklabels': True,
+                'tickmode': 'linear',
+            }
+
+    )
+
+    fig.show()
