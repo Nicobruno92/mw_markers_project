@@ -1,8 +1,17 @@
 import mne
 import numpy as np
 import pandas as pd
+
 import seaborn as sns
 import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as pgo
+import plotly.offline as pyo
+import plotly.io as pio
+from plotly.subplots import make_subplots
+
+pyo.init_notebook_mode(connected = True)
+
 
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
@@ -348,7 +357,10 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         from scipy.stats import trim_mean
         
         def trim_mean80(a, axis=0):
-            return trim_mean(a, proportiontocut=.1, axis=axis)       
+            return trim_mean(a, proportiontocut=.1, axis=axis)
+        
+        def entropy(a, axis=0):  # noqa
+            return -np.nansum(a * np.log(a), axis=axis) / np.log(a.shape[axis])
 
         # =============================================================================
         # SPECTRAL MARKERS
@@ -361,13 +373,10 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         
 
 
-        ###alpha normalized###
-        alpha = PowerSpectralDensity(estimator=base_psd, fmin=8., fmax=13.,normalize=True, comment='alphan')
-        alpha.fit(epochs)
-
         reduction_func = [{'axis': 'frequency', 'function': np.sum},
              {'axis': 'channels', 'function': np.mean},
-             {'axis': 'epochs', 'function': trim_mean80}]
+             {'axis': 'epochs', 'function': np.mean}]
+        
         ###alpha normalized###
         alpha = PowerSpectralDensity(estimator=base_psd, fmin=8., fmax=13.,normalize=True, comment='alpha')
         alpha.fit(epochs)
@@ -389,16 +398,31 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         delta.fit(epochs)
         datadelta = delta._reduce_to(reduction_func, target=target, picks=None)
 
-        #theta normalized
+        #theta normalized 
         theta = PowerSpectralDensity(estimator=base_psd, fmin=4., fmax=8.,normalize=True, comment='theta')
         theta.fit(epochs)
-        datatheta_n = theta._reduce_to(reduction_func, target=target, picks=None)
+        datatheta_n = theta._reduce_to(reduction_func, target=target, picks= None)
 
 
         #theta
         theta = PowerSpectralDensity(estimator=base_psd, fmin=4., fmax=8,normalize=False, comment='theta')
         theta.fit(epochs)
         datatheta = theta._reduce_to(reduction_func, target=target, picks=None)
+
+#       theta normalized Frontal
+        frontal_chs= ['AF3', 'AFz', 'AF4', 'F1', 'Fz', 'F2', 'FC1', 'FCz', 'FC2']
+        frontal_chs = ['Fz']
+        roi_frontal = np.array(mne.pick_channels(epochs_erp.info['ch_names'], include=frontal_chs))
+        
+        theta = PowerSpectralDensity(estimator=base_psd, fmin=4., fmax=8.,normalize=True, comment='theta')
+        theta.fit(epochs)
+        datafrontaltheta_n = theta._reduce_to(reduction_func, target=target,picks = {'epochs': None,'channels': roi_frontal})
+
+
+        #theta FRONTAL
+        theta = PowerSpectralDensity(estimator=base_psd, fmin=4., fmax=8,normalize=False, comment='theta')
+        theta.fit(epochs)
+        datafrontaltheta = theta._reduce_to(reduction_func, target=target,picks = {'epochs': None,'channels': roi_frontal})
 
         #gamma normalized
         gamma = PowerSpectralDensity(estimator=base_psd, fmin=30., fmax=45.,normalize=True, comment='gamma')
@@ -426,15 +450,20 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         
         #Spectral Entropy
         se = PowerSpectralDensity(estimator=base_psd, fmin=1., fmax=45.,
-                         normalize=False, comment='summary_se')
+                         normalize=True, comment='summary_se')
         se.fit(epochs)
+        
+        reduction_func = [{'axis': 'frequency', 'function': entropy},
+             {'axis': 'channels', 'function': np.mean},
+             {'axis': 'epochs', 'function': np.mean}]
+        
         datase = se._reduce_to(reduction_func, target=target, picks=None)
         
         
         #### Spectral Summary ####
         
         reduction_func= [{'axis': 'channels', 'function': np.mean},
-             {'axis': 'epochs', 'function': trim_mean80}]
+             {'axis': 'epochs', 'function': np.mean}]
         
         # msf
         msf = PowerSpectralDensitySummary(estimator=base_psd, fmin=1., fmax=45.,
@@ -461,9 +490,9 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         ### Kolgomorov complexity ###
         komplexity = KolmogorovComplexity(tmin=tmin, tmax=tmax, backend='openmp')
         komplexity.fit(epochs)
-        komplexityobject=komplexity.data_ ###Object to save, number of channels*number of epochs, it's ndarray
+#         komplexityobject=komplexity.data_ ###Object to save, number of channels*number of epochs, it's ndarray
         reduction_func= [{'axis': 'channels', 'function': np.mean},
-             {'axis': 'epochs', 'function': trim_mean80}]
+             {'axis': 'epochs', 'function': np.mean}]
 
 
         datakomplexity = komplexity._reduce_to(reduction_func, target=target, picks=None)
@@ -500,7 +529,7 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         # =============================================================================
         reduction_func= [{'axis': 'channels_y', 'function': np.median},
              {'axis': 'channels', 'function': np.mean},
-             {'axis': 'epochs', 'function': trim_mean80}]
+             {'axis': 'epochs', 'function': np.mean}]
         
         ###wSMI ###
         wSMI = SymbolicMutualInformation(tmin=tmin, tmax=tmax, kernel=3, tau=1, backend="openmp",
@@ -538,7 +567,7 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
         ###Contingent Negative Variation (CNV)###
         cnv = ContingentNegativeVariation(tmin=-0.004, tmax=0.596)
         
-        reduction_func = [{'axis': 'epochs', 'function': trim_mean80},
+        reduction_func = [{'axis': 'epochs', 'function': np.mean},
              {'axis': 'channels', 'function': np.mean}]
         
         cnv.fit(epochs_erp)
@@ -592,11 +621,11 @@ def all_markers(epochs, tmin, tmax, target, epochs_erp = None):
                 'p_e_1':datap_e1,'p_e_2':datap_e2,'p_e_4':datap_e4,'p_e_8':datap_e8, 
                 'k':datakomplexity, 'se':datase,
                 'msf': datamsf, 'sef90':datasef90, 'sef95':datasef95,
-                'b':databeta,'b_n':databetaa_n, 'g':datagamma, 'g_n':datagamma_n, 
+                'b':databeta,'b_n':databetaa_n, 'g':datagamma, 'g_n':datagamma_n,
+                'ft': datafrontaltheta, 'ft_n':datafrontaltheta_n,
                 't':datatheta,'t_n': datatheta_n , 'd':datadelta, 'd_n':datadelta_n, 
                 'a_n':dataalpha_n, 'a':dataalpha, 
                 'CNV':dataCNV, 'P1':dataP1, 'P3a': dataP3a, 'P3b': dataP3b}
-
 
 
 def multivariate_classifier(
