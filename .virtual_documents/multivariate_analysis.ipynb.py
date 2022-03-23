@@ -26,11 +26,12 @@ from sklearn.model_selection import (
 )
 
 from imblearn.under_sampling import RandomUnderSampler
-from imblearn.over_sampling import RandomOverSampler
+from imblearn.over_sampling import RandomOverSampler, SMOTE
+from imblearn.pipeline import Pipeline as imb_pipeline
 
 from sklearn.ensemble import ExtraTreesClassifier
 
-from utils import multivariate_classifier, correct_name_markers
+from utils import multivariate_classifier, correct_name_markers, plot_univariate
 
 
 # plotting parameters
@@ -337,6 +338,24 @@ df_forest_mind, feat_import = multivariate_classifier(data = df_mind, label = 'm
 df_forest_mind.to_csv('Data/multivariate_forest_mind_segment.csv')
 
 
+fig =px.violin(df_forest_mind, x = 'auc', box = True, points = 'all',template = "plotly_white", color_discrete_sequence = [pink], labels = {'auc': 'AUC'})
+fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
+
+fig.update_layout(
+#     title = f'Mean AUC = {df_forest_mind.auc.mean()}',
+    autosize=False,
+    width=800,
+    height=800,
+    yaxis = {'title': 'Whole model',
+            'showticklabels': True,
+            'tickmode': 'linear',},
+    xaxis ={
+             'range':[0.2, 1]
+        }
+)
+fig.show()
+
+
 agg_dict = {k:['mean','std'] for k in markers }
 agg_dict.update({k:'first' for k in df_markers.drop(markers, axis=1).columns})
 
@@ -347,20 +366,54 @@ df_mw = (
     .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
 )
 
-df_mw.columns = df_mw.columns.map("_".join)
+# df_mw.columns = df_mw.columns.map("_".join)
+
+# df_mw  = (df_mw
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
+#             .drop(['participant', 'probe', 'segment'], axis = 1) 
+#            )
+
+
+
+#### Use latex command for nmaes###
+####it slow downs the computer, just for final figures.
+
+df_mw = correct_name_markers(df_mw)
+
+df_mw.columns = df_mw.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
 
 df_mw  = (df_mw
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
-            .drop(['participant', 'probe', 'segment'], axis = 1) 
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment', 'mind$_{}$':'mind'})
+#             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw   ")
+            .drop(['participant', 'probe',  'segment'], axis = 1)
+
            )
 
 
-df_forest_mw = multivariate_classifier(data = df_mw, label = 'mind', features = df_mw.drop('mind', axis = 1).columns, 
+df_forest_mw, feat_import_mw = multivariate_classifier(data = df_mw, label = 'mind', features = df_mw.drop('mind', axis = 1).columns, 
                                  model = 'forest', pca =False, n_components = 10,
                                  cv_splits= 5, 
                                  permutation = True, n_permutations = 1000)
 
 df_forest_mw.to_csv('Data/multivariate_forest_mw_segment.csv')
+
+
+fig =px.violin(df_forest_mw, x = 'auc', box = True, points = 'all',template = "plotly_white", color_discrete_sequence = [lblue], labels = {'auc': 'AUC'})
+fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
+
+fig.update_layout(
+#     title = f'Mean AUC = {df_forest_mw.auc.mean()}',
+    autosize=False,
+    width=800,
+    height=800,
+    yaxis = {'title': 'Whole model',
+            'showticklabels': True,
+            'tickmode': 'linear',},
+    xaxis ={
+             'range':[0.2, 1]
+        }
+)
+fig.show()
 
 
 agg_dict = {k:['mean', 'std'] for k in markers }
@@ -372,10 +425,23 @@ df_probe = (
     .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
 )
 
-df_probe.columns = df_probe.columns.map("_".join)
+# df_probe.columns = df_probe.columns.map("_".join)
+
+# df_probe  = (df_probe
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
+#             .drop(['participant', 'mind', 'segment'], axis = 1) 
+#            )
+
+#### Use latex command for nmaes###
+##it slow downs the computer, just for final figures.
+
+df_probe = correct_name_markers(df_probe)
+
+df_probe.columns = df_probe.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
 
 df_probe  = (df_probe
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment'})
+           
             .drop(['participant', 'mind', 'segment'], axis = 1) 
            )
 
@@ -387,30 +453,171 @@ probe_rus = rus.fit_resample(df_probe.drop('probe', axis = 1).astype("float32").
 df_probe_rus = pd.DataFrame(probe_rus[0], columns =df_probe.drop('probe', axis = 1).columns ).assign(probe = probe_rus[1])
 
 
-df_svm_probe = multivariate_classifier(data = df_probe_rus, label = 'probe', features = df_probe_rus.drop('probe', axis = 1).columns, 
-                                 model = 'SVM', pca =False, n_components = 20,
-                                 cv_splits= 5,grid_search = True, 
-                                 permutation = True, n_permutations = 1000)
+ros = SMOTE(random_state=42)# fit predictor and target variable
+
+probe_ros = ros.fit_resample(df_probe.drop('probe', axis = 1).astype("float32").values, df_probe.probe)
+
+df_probe_ros = pd.DataFrame(probe_ros[0], columns =df_probe.drop('probe', axis = 1).columns ).assign(probe = probe_ros[1])
 
 
-df_forest_probe = multivariate_classifier(data = df_probe_rus, label = 'probe', features = df_probe_rus.drop('probe', axis = 1).columns, 
-                                 model = 'forest', 
-                                pca =False, n_components = 20,
-                                 cv_splits= 5,
-                                 permutation = True, n_permutations = 1000)
+data = df_probe
+label = 'probe'
+features = df_probe.drop('probe', axis = 1).columns
+cv_splits = 5
+n_permutations = 1000
+
+#pipeline steps init
+steps = [("scaler", StandardScaler())]
+
+steps.append(('rus', RandomUnderSampler(random_state=42, replacement=True) ))
 
 
-df_auc_mind = pd.read_csv('Data/multivariate_mind_segment.csv')
-df_auc_mw= pd.read_csv('Data/multivariate_mw_segment.csv')
 
-# df_segment = 
+y, lbl = pd.factorize(data[label])
+X = data[features].astype("float32").values
+    
+n_estimators = 1000
+steps.append(('Forest',ExtraTreesClassifier(
+        n_estimators=n_estimators, max_features=1, criterion='entropy',
+        max_depth=None, random_state=42, class_weight=None)))
 
-fig =px.violin(df_forest_mind, x = 'auc', box = True, points = 'all',template = "plotly_white", color_discrete_sequence = [pink])
+pipe_cv = imb_pipeline(steps)
+
+cv = KFold(cv_splits, shuffle=True, random_state = 42)
+
+
+aucs = cross_val_score(
+    X=X, y=y, estimator=pipe_cv,
+    scoring='roc_auc', cv=cv,  n_jobs = -1)
+
+
+df_forest_probe_rus = pd.DataFrame(aucs, columns=["auc"])
+
+
+sns.catplot(x = 'auc', orient = 'h', data = df_auc, kind = 'violin')
+plt.title(f'Mean = {np.mean(df_auc.auc)}; SD = {np.std(df_auc.auc)}')
+plt.axvline(x = 0.5, linestyle = 'dashed')
+plt.show()
+
+
+# Feature importance
+
+pipe_cv.fit(X, y)
+variable_importance = pipe_cv.steps[-1][-1].feature_importances_
+sorter = variable_importance.argsort()
+
+feat_imp_probe_rus = pd.DataFrame(np.array([features,variable_importance]).T, 
+                           columns = ['features', 'value']).sort_values('value', ascending = False)
+
+sns.scatterplot(x = feat_import.value, y =feat_import.features)
+plt.title(f'AUC = {np.mean(df_auc.auc)}')
+plt.show()
+
+
+score, perm_scores, pvalue = permutation_test_score(
+    pipe_cv, X, y, scoring="roc_auc", cv=cv, n_permutations=n_permutations, random_state = 42, n_jobs= -1
+)
+
+
+print(f"p_value = {pvalue}")
+
+plt.hist(perm_scores, bins=20, density=True)
+plt.axvline(score, ls="--", color="r")
+score_label = (
+    f"Score on original\ndata: {score:.2f}\n" f"(p-value: {pvalue:.3f})"
+)
+plt.text(score, np.max(perm_scores), score_label, fontsize=12)
+plt.xlabel("Accuracy score")
+plt.ylabel("Probability")
+plt.show()
+
+
+data = df_probe
+label = 'probe'
+features = df_probe.drop('probe', axis = 1).columns
+cv_splits = 5
+n_permutations = 1000
+
+#pipeline steps init
+steps = [("scaler", StandardScaler())]
+
+steps.append(('ros', SMOTE(random_state=42)))
+
+
+
+y, lbl = pd.factorize(data[label])
+X = data[features].astype("float32").values
+    
+n_estimators = 1000
+steps.append(('Forest',ExtraTreesClassifier(
+        n_estimators=n_estimators, max_features=1, criterion='entropy',
+        max_depth=None, random_state=42, class_weight=None)))
+
+pipe_cv = imb_pipeline(steps)
+
+cv = KFold(cv_splits, shuffle=True, random_state = 42)
+
+
+aucs = cross_val_score(
+    X=X, y=y, estimator=pipe_cv,
+    scoring='roc_auc', cv=cv,  n_jobs = -1)
+
+
+df_forest_probe_ros = pd.DataFrame(aucs, columns=["auc"])
+
+
+sns.catplot(x = 'auc', orient = 'h', data = df_forest_probe_ros, kind = 'violin')
+plt.title(f'Mean = {np.mean(df_forest_probe_ros.auc)}; SD = {np.std(df_forest_probe_ros.auc)}')
+plt.axvline(x = 0.5, linestyle = 'dashed')
+plt.show()
+
+
+# Feature importance
+
+pipe_cv.fit(X, y)
+variable_importance = pipe_cv.steps[-1][-1].feature_importances_
+sorter = variable_importance.argsort()
+
+feat_imp_probe_ros = pd.DataFrame(np.array([features,variable_importance]).T, 
+                           columns = ['features', 'value']).sort_values('value', ascending = False)
+
+sns.scatterplot(x = feat_imp_probe_ros.value, y =feat_imp_probe_ros.features)
+plt.title(f'AUC = {np.mean(df_auc.auc)}')
+plt.show()
+
+
+# score, perm_scores, pvalue = permutation_test_score(
+#     pipe_cv, X, y, scoring="roc_auc", cv=cv, n_permutations=n_permutations, random_state = 42, n_jobs= -1
+# )
+
+
+# print(f"p_value = {pvalue}")
+
+# plt.hist(perm_scores, bins=20, density=True)
+# plt.axvline(score, ls="--", color="r")
+# score_label = (
+#     f"Score on original\ndata: {score:.2f}\n" f"(p-value: {pvalue:.3f})"
+# )
+# plt.text(score, np.max(perm_scores), score_label, fontsize=12)
+# plt.xlabel("Accuracy score")
+# plt.ylabel("Probability")
+# plt.show()
+
+
+df_forest_probe_ros['balance'] = 'over-sample' 
+df_forest_probe_rus['balance'] = 'under-sample' 
+
+df_forest_probe = pd.concat([df_forest_probe_rus, df_forest_probe_ros])
+
+
+fig =px.violin(df_forest_probe, x = 'auc', box = True, points = 'all',template = "plotly_white", 
+               color_discrete_sequence = [orange, green], labels = {'auc': 'AUC'},
+              facet_col = 'balance')
 fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
 
 fig.update_layout(
-    title = f'Mean AUC = {df_forest_mind.auc.mean()}',
-    autosize=False,
+#     title = f'Mean AUC = {df_forest_mw.auc.mean()}',
+    autosize=True,
     width=800,
     height=800,
     yaxis = {'title': 'Whole model',
@@ -422,39 +629,29 @@ fig.update_layout(
 )
 fig.show()
 
-fig =px.violin(df_forest_mw, x = 'auc', box = True, points = 'all',template = "plotly_white", color_discrete_sequence = [lblue])
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
+
+fig = px.scatter(feat_imp_probe_ros.sort_values(by = 'value'),x = 'value', y = 'features', template = "plotly_white",
+                  color_discrete_sequence = [orange],
+
+                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']}, 
+                 labels = {'value':'Feature importance', 'features': 'Markers'}
+
+                )
+
+fig.update_traces(marker=dict(size = 8))
 
 fig.update_layout(
-    title = f'Mean AUC = {df_forest_mw.auc.mean()}',
     autosize=False,
     width=800,
-    height=800,
-    yaxis = {'title': 'Whole model',
+    height=1000,
+#     xaxis= {'range': (0.34, 0.66)},
+    yaxis = {
             'showticklabels': True,
-            'tickmode': 'linear',},
-    xaxis ={
-             'range':[0.2, 1]
+            'tickmode': 'linear',
         }
-             
-        
-)
-fig.show()
 
-fig =px.violin(df_forest_probe, x = 'auc', box = True, points = 'all',template = "plotly_white", color_discrete_sequence = [orange])
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
-
-fig.update_layout(
-    title = f'Mean AUC = {df_forest_probe.auc.mean()}',
-    autosize=False,
-    width=800,
-    height=800,
-    yaxis = {'title': 'Whole model',
-            'showticklabels': True,
-            'tickmode': 'linear',},
-    xaxis ={'range':[0.2, 1]
-        }
 )
+
 fig.show()
 
 

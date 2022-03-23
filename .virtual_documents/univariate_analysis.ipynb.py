@@ -144,27 +144,27 @@ df_mind = (
 
 #### Use normal names###
 
-df_mind.columns = df_mind.columns.map("_".join)
+# df_mind.columns = df_mind.columns.map("_".join)
 
-df_mind  = (df_mind
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment', 'mind2_':'mind2'})
-#             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
-            .drop(['participant', 'probe', 'mind', 'segment'], axis = 1) 
-           )
+# df_mind  = (df_mind
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment', 'mind2_':'mind2'})
+# #             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
+#             .drop(['participant', 'probe', 'mind', 'segment'], axis = 1) 
+#            )
 
 
 #### Use latex command for nmaes###
 ##it slow downs the computer, just for final figures.
 
-# df_mind = correct_name_markers(df_mind)
+df_mind = correct_name_markers(df_mind)
 
-# df_mind.columns = df_mind.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
+df_mind.columns = df_mind.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
 
-# df_mind  = (df_mind
-#             .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment', 'mind2$_{}$':'mind2'})
-# #             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
-#             .drop(['participant', 'probe', 'mind', 'segment'], axis = 1) 
-#            )
+df_mind  = (df_mind
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment', 'mind2$_{}$':'mind2'})
+#             .query("mind get_ipython().getoutput("= 'dMW'") #if you want to test against just one of the mw            ")
+            .drop(['participant', 'probe', 'mind', 'segment'], axis = 1) 
+           )
 
 
 AUC = []
@@ -290,35 +290,6 @@ df_mw_final = (df_agg.merge(segment_mw_roc, on = 'markers', how= 'inner')
 print(df_mw_final.to_latex(header = True, index= False, float_format="{:0.3f}".format, escape = False, longtable=True))
 
 
-segment_mw_roc = pd.read_csv('Data/univariate_roc_mw_segment.csv')
-
-fig = px.scatter(segment_mw_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
-                 symbol_sequence = ['circle-open','circle','hexagram' ],
-#                  color = 'significant',
-                 color_discrete_sequence = [lblue, green,orange, pink], 
-                 
-                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
-                 labels = {'AUC': 'sMW>dMW                                          sMW<dMW'}
-                )
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
-fig.update_traces(marker=dict(size = 8))
-
-fig.update_layout(
-    autosize=False,
-    width=800,
-    height=1000,
-    xaxis= {'range': (0.35, 0.65)},
-    yaxis = {
-            'showticklabels': True,
-            'tickmode': 'linear',
-        }
-    
-)
-fig.show()
-pio.write_json(fig, 'Figs/univariate_roc_mw_segment.plotly')
-# fig.write_image('Figs/univariate_roc_mw_segment.png')
-
-
 AUC = pd.DataFrame()
 pvalues = {}
 for i in df_mw.drop('mind', axis = 1).columns:
@@ -370,18 +341,25 @@ df_probe = (
     .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
 )
 
-df_probe.columns = df_probe.columns.map("_".join)
+# df_probe.columns = df_probe.columns.map("_".join)
+
+# df_probe  = (df_probe
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
+#             .drop(['participant', 'mind', 'segment'], axis = 1) 
+#            )
+
+#### Use latex command for nmaes###
+##it slow downs the computer, just for final figures.
+
+df_probe = correct_name_markers(df_probe)
+
+df_probe.columns = df_probe.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
 
 df_probe  = (df_probe
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'})
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment'})
+           
             .drop(['participant', 'mind', 'segment'], axis = 1) 
            )
-
-
-df_probe.groupby('probe').count()
-
-
-sns.displot(x = 't_n_mean', data= df_probe, hue = 'probe', kind = 'kde')
 
 
 sc = df_probe[df_probe.probe == 'SC']
@@ -407,44 +385,17 @@ for i in df_probe.drop('probe', axis = 1).columns:
 probe_roc = pd.DataFrame(AUC, columns = ['markers', 'AUC'])
 
 p_df =pd.DataFrame.from_dict(pvalues, orient = 'index', columns = ['p_value']).reset_index().rename(columns ={'index': 'markers'})
-probe_roc = (probe_roc
+probe_roc_rus = (probe_roc
             .merge(p_df, on = 'markers', how = 'inner')
             .assign(
                     p_corrected = lambda df: multipletests(df.p_value, method = 'fdr_bh')[1],
                     significant = lambda df: np.select([(df.p_value < 0.05) & (df.p_corrected < 0.05), (df.p_value < 0.05) & (df.p_corrected > 0.05),  
                                                  (df.p_value > 0.05) & (df.p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                                    balance = 'under-sample'
                    )
            )
 
 probe_roc.to_csv('Data/univariate_roc_probe.csv')
-
-
-probe_roc = pd.read_csv('Data/univariate_roc_probe.csv')
-fig = px.scatter(probe_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
-                 symbol_sequence = ['circle-open','circle','hexagram' ],
-#                  color = 'significant',
-                 color_discrete_sequence = [orange, pink], 
-                 
-                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
-                 labels = {'AUC': 'MW>OT                                             MW<OT'}
-                )
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
-fig.update_traces(marker=dict(size = 8))
-
-fig.update_layout(
-    autosize=False,
-    width=800,
-    height=800,
-    xaxis= {'range': (0.35, 0.65)},
-    yaxis = {
-            'showticklabels': True,
-            'tickmode': 'linear',
-        }
-    
-)
-fig.show()
-pio.write_json(fig, 'Figs/univariate_roc_probe.plotly')
-# fig.write_image('Figs/univariate_roc_mw_segment.png')
 
 
 AUC = []
@@ -466,41 +417,31 @@ for i in df_probe.drop('probe', axis = 1).columns:
 probe_roc = pd.DataFrame(AUC, columns = ['markers', 'AUC'])
 
 p_df =pd.DataFrame.from_dict(pvalues, orient = 'index', columns = ['p_value']).reset_index().rename(columns ={'index': 'markers'})
-probe_roc = (probe_roc
+probe_roc_ros = (probe_roc
             .merge(p_df, on = 'markers', how = 'inner')
             .assign(
                     p_corrected = lambda df: multipletests(df.p_value, method = 'fdr_bh')[1],
                     significant = lambda df: np.select([(df.p_value < 0.05) & (df.p_corrected < 0.05), (df.p_value < 0.05) & (df.p_corrected > 0.05),  
                                                  (df.p_value > 0.05) & (df.p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                    balance = 'over-sample'
                    )
            )
 
 probe_roc.to_csv('Data/univariate_roc_probe.csv')
 
 
-probe_roc = pd.read_csv('Data/univariate_roc_probe.csv')
-fig = px.scatter(probe_roc.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white", symbol = 'significant', 
-                 symbol_sequence = ['circle-open','circle','hexagram' ],
-#                  color = 'significant',
-                 color_discrete_sequence = [orange], 
-                 
-                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']})
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
+probe_roc = pd.concat([probe_roc_ros, probe_roc_rus])
 
-fig.update_traces(marker=dict(size = 8))
-fig.update_layout(
-    autosize=False,
-    width=800,
-    height=800,
-    yaxis = {
-            'showticklabels': True,
-            'tickmode': 'linear',
-        }
-    
-)
-fig.show()
-pio.write_json(fig, 'Figs/univariate_roc_probe.plotly')
-# fig.write_image('Figs/univariate_roc_mw_segment.png')
+df_agg = df_probe.melt(id_vars=['probe'], var_name = 'markers', value_name = 'value').groupby(['markers','probe'], as_index = False).agg(['mean','std'], axis = 0).reset_index()
+df_agg.columns = df_agg.columns.map(''.join)
+
+df_probe_final = (df_agg.merge(probe_roc, on = 'markers', how= 'inner')
+                 .drop(['significant'], axis =1)
+#                  .assign(mind = lambda df: df.mind.str.replace('d', 'MW').replace('on-task','OT'))
+                )
+
+                                                                                 
+print(df_probe_final.to_latex(header = True, index= False, float_format="{:0.3f}".format, escape = False, longtable=True))
 
 
 agg_dict = {k:'mean' for k in markers }

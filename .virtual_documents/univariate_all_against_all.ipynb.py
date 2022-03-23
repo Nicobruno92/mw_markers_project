@@ -137,14 +137,32 @@ df_probe = (
     .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
 )
 
-df_probe.columns = df_probe.columns.map("_".join)
+# df_probe.columns = df_probe.columns.map("_".join)
+
+# df_probe  = (df_probe
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'}) 
+#              .assign(mind_order = lambda df: np.select([df.mind == 'on-task', df.mind == 'about-task', df.mind == 'distracted',df.mind == 'dMW', df.mind == 'sMW'], [5,4,3,2,1]) )
+# #             .sort_values(by = 'mind_order')
+#             .drop(['participant', 'probe', 'segment'], axis = 1)
+#            )    
+
+
+#### Use latex command for nmaes###
+##it slow downs the computer, just for final figures.
+
+df_probe = correct_name_markers(df_probe)
+
+df_probe.columns = df_probe.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
+
 
 df_probe  = (df_probe
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'}) 
-             .assign(mind_order = lambda df: np.select([df.mind == 'on-task', df.mind == 'about-task', df.mind == 'distracted',df.mind == 'dMW', df.mind == 'sMW'], [5,4,3,2,1]) )
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment'})
+             .assign(mind_order = lambda df: np.select([df.mind == 'on-task', df.mind == 'about-task', df.mind == 'distracted',df.mind == 'dMW', df.mind == 'sMW'], [5,4,2,3,1]) )
 #             .sort_values(by = 'mind_order')
             .drop(['participant', 'probe', 'segment'], axis = 1)
-           )    
+           )   
+
+
 
 df_all_probe = pd.DataFrame()
 
@@ -250,11 +268,12 @@ for i in mind_states:
         df_all_probe = df_all_probe.append(df_ros)
 
 
-def plot_univariate(df, contrast, label, color = green, balance = 'over-sample'):
+def plot_univariate(df, label, color = green, contrast = None):
     
-    df = df.query(f"comparison == '{contrast}'").query(f"balance == '{balance}'")
+    if contrast is not None:
+        df = df.query(f"comparison == '{contrast}'")
 
-    fig = px.scatter(df_contrast.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white",
+    fig = px.scatter(df.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white",
                      symbol = 'significant', symbol_sequence = ['circle-open','circle','hexagram' ], color_discrete_sequence = [color],
 
                      category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']}, 
@@ -269,7 +288,7 @@ def plot_univariate(df, contrast, label, color = green, balance = 'over-sample')
         autosize=False,
         width=800,
         height=1000,
-        xaxis= {'range': (0.34, 0.66)},
+        xaxis= {'range': (0.33, 0.67)},
         yaxis = {
                 'showticklabels': True,
                 'tickmode': 'linear',
@@ -284,7 +303,7 @@ def plot_univariate(df, contrast, label, color = green, balance = 'over-sample')
 ot_contrasts = ['about-task vs on-task','distracted vs on-task', 'dMW vs on-task', 'sMW vs on-task']
 
 
-plot_univariate(df = df_all_probe, contrast = ot_contrasts[0], label =['about-task', 'on-task'] , color = orange, balance = 'over-sample')
+plot_univariate(df = df_all_probe.query("balance == 'over-sample'"), contrast = ot_contrasts[3], label =['sMW', 'on-task'] , color = pink)
 
 
 
@@ -297,6 +316,13 @@ def symbol_fun(x):
         symbols = 'circle-open'
             
     return symbols
+
+
+def hex_to_rgb(hex_color: str) -> tuple:
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 3:
+        hex_color = hex_color * 2
+    return int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
 
 
 ot_contrasts = ['about-task vs on-task','distracted vs on-task', 'dMW vs on-task', 'sMW vs on-task']
@@ -329,7 +355,8 @@ fig.add_trace(pgo.Scatterpolar(
     fill='toself',
     name='about-task vs on-task',
     mode = 'lines+markers',
-    marker = {'color':green, 'size': 10},
+    marker = {'color':orange, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(orange), 0.2)}",
     marker_symbol= about_task.symbol.to_list()
 ))
 
@@ -339,7 +366,8 @@ fig.add_trace(pgo.Scatterpolar(
     fill='toself',
     name='distracted vs on-task',
         mode = 'lines+markers',
-    marker = {'color':lblue, 'size': 10},
+    marker = {'color':green, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(green), 0.2)}",
     marker_symbol= distracted_ot.symbol.to_list()
 ))
 
@@ -349,7 +377,8 @@ fig.add_trace(pgo.Scatterpolar(
     fill='toself',
     name='dMW vs on-task',
     mode = 'lines+markers',
-    marker = {'color':pink, 'size': 10},
+    marker = {'color':lblue, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(lblue), 0.2)}",
     marker_symbol= dmw_ot.symbol.to_list()
 ))
 
@@ -359,7 +388,8 @@ fig.add_trace(pgo.Scatterpolar(
     fill='toself',
     name='sMW vs on-task',
     mode = 'lines+markers',
-    marker = {'color':orange, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(pink), 0.2)}",
+    marker = {'color':pink, 'size': 10,},
     marker_symbol= smw_ot.symbol.to_list()
 ))
 
@@ -367,17 +397,17 @@ fig.add_trace(pgo.Scatterpolar(
 
 
 fig.update_layout(
-    title="All against On-task for Significant markers",
+#     title="All against On-task for Significant markers",
 #     legend_title="Classification",
-    width=600,
-    height=600,
+    width=800,
+    height=800,
     template = 'plotly_white',
     
   polar=dict(
     radialaxis=dict(
     title = 'AUC',
       visible=True,
-        range = [0.3,0.7]
+        range = [0.33,0.7]
     ),
   ),
     
@@ -386,26 +416,6 @@ fig.update_layout(
 
 fig.show()
 # pio.write_json(fig, 'Figs/radar_auc_significant.plotly')
-
-
-df_ot= df_all_probe.query("balance == 'over-sample'").query(f"markers in {['t_n_mean', 't_n_std', ]}") #'t_mean', 't_std', 'p_e_8_mean', 'p_e_8_std', 'wSMI_8_mean', 'wSMI_8_std'
-fig = px.bar(df_ot, y = 'comparison', x='AUC', facet_col = 'markers', color = 'significant', color_discrete_sequence = [lblue, green, pink], 
-                         category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']})
-fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
-
-fig.update_layout(
-    title = 'PC',
-    autosize=True,
-#     width=800,
-#     height=1600,
-    xaxis = {
-            'showticklabels': True,
-#             'tickmode': 'linear',
-        'range': [0.35, 0.67]
-        },
-#             xaxis = {'title': 'a'}
-
-)
 
 
 df_ot= df_all_probe.query("balance == 'over-sample'").query(f"markers in {['p_e_4_mean']}") #'t_mean', 't_std', 'p_e_8_mean', 'p_e_8_std', 'wSMI_8_mean', 'wSMI_8_std'
@@ -510,14 +520,28 @@ df_self = (
     .groupby(['segment', 'participant'], as_index = False).agg(agg_dict)
 )
 
-df_self.columns = df_self.columns.map("_".join)
+# df_self.columns = df_self.columns.map("_".join)
+
+# df_self  = (df_self
+#             .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'}) 
+#              .assign(mind_order = lambda df: np.select([df.mind == 'about-task', df.mind == 'distracted',df.mind == 'dMW', df.mind == 'sMW'], [4,3,2,1]) )
+# #             .sort_values(by = 'mind_order')
+#             .drop(['participant', 'probe', 'segment'], axis = 1)
+#            )    
+
+
+df_self = correct_name_markers(df_self)
+
+df_self.columns = df_self.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
+
 
 df_self  = (df_self
-            .rename(columns = {'participant_first':'participant', 'probe_first':'probe', 'mind_first':'mind', 'segment_first':'segment'}) 
-             .assign(mind_order = lambda df: np.select([df.mind == 'about-task', df.mind == 'distracted',df.mind == 'dMW', df.mind == 'sMW'], [4,3,2,1]) )
+            .rename(columns = {'participant$_{first}$':'participant', 'probe$_{first}$':'probe', 'mind$_{first}$':'mind', 'segment$_{first}$':'segment'})
+             .assign(mind_order = lambda df: np.select([ df.mind == 'about-task', df.mind == 'distracted',df.mind == 'dMW', df.mind == 'sMW'], [4,2,3,1]) )
 #             .sort_values(by = 'mind_order')
             .drop(['participant', 'probe', 'segment'], axis = 1)
-           )    
+           )   
+
 
 df_all_self = pd.DataFrame()
 
@@ -623,119 +647,6 @@ for i in mind_states:
         df_all_self = df_all_self.append(df_ros)
 
 
-# segment_mind_roc = pd.read_csv('Data/univariate_roc_mind_segment.csv')
-for i in mind_states:
-    for j in mind_states:
-        if i == j:
-            break
-        contrast = f"{i} vs {j}"
-        label = sorted([i,j], key = mind_dict.get)
-        
-        df_contrast = df_all_self.query(f"comparison == '{contrast}'").query("balance == 'unbalance'")
-
-        fig = px.scatter(df_contrast.sort_values(by = 'AUC'),x = 'AUC', y = 'markers', template = "plotly_white",
-                         symbol = 'significant', symbol_sequence = ['circle-open','circle','hexagram' ],
-#                          facet_col = 'balance', color = 'balance',
-                         color_discrete_sequence = [pink, green,orange, pink], 
-                         category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected'], 'balance': ['unbalance', 'under-sample', 'over-sample']}, 
-                         labels = {'AUC': f'{label[0]}>{label[1]}                  {label[0]}<{label[1]}'}
-                        
-                        )
-        
-        fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="black")
-        fig.update_traces(marker=dict(size = 8))
-
-        fig.update_layout(
-            title = contrast + '('+ str(len(df_probe.query(f"mind == '{i}'")))+','+str(len(df_probe.query(f"mind == '{j}'"))),
-            autosize=True,
-            width=800,
-            height=800,
-            yaxis = {
-                    'showticklabels': True,
-                    'tickmode': 'linear',
-                },
-#             xaxis = {'title': 'a'}
-
-        )
-        fig.show()
-# pio.write_json(fig, 'Figs/univariate_roc_mw_segment.plotly')
-# fig.write_image('Figs/univariate_roc_mw_segment.png')
-
-
-at_contrasts = ['distracted vs about-task', 'dMW vs about-task', 'sMW vs about-task']
-
-df_at_contrasts = df_all_self.query(f"comparison in {at_contrasts}").query("balance == 'unbalance'")
-significants = df_at_contrasts.query("significant get_ipython().getoutput("= 'p > 0.05'").markers.unique().tolist()")
-
-distracted_at =df_at_contrasts.query("comparison == 'distracted vs about-task'").query(f'markers in {significants}').assign(symbol = lambda df: df.significant.apply(symbol_fun))
-dmw_at = df_at_contrasts.query("comparison == 'dMW vs about-task'").query(f'markers in {significants}').assign(symbol = lambda df: df.significant.apply(symbol_fun))
-smw_at = df_at_contrasts.query("comparison == 'sMW vs about-task'").query(f'markers in {significants}').assign(symbol = lambda df: df.significant.apply(symbol_fun))
-
-fig = pgo.Figure()
-
-
-
-fig.add_trace(pgo.Scatterpolar(
-    r=np.ones(len(distracted_at['markers'])) * 0.5,
-    theta=distracted_at['markers'],
-    name = 'Chance: AUC = 0.5',
-    mode = 'lines',
-    line = {'color':'grey', 'width': 2, 'dash': 'dash' },
-))
-
-fig.add_trace(pgo.Scatterpolar(
-    r=distracted_at.AUC,
-    theta=distracted_at['markers'],
-    fill='toself',
-    name='distracted vs about-task', 
-    mode = 'lines+markers',
-    marker = {'color':lblue, 'size': 10},
-    marker_symbol= distracted_at.symbol.to_list()
-))
-
-fig.add_trace(pgo.Scatterpolar(
-    r=dmw_at.AUC,
-    theta=dmw_at['markers'],
-    fill='toself',
-    name='dMW vs about-task',
-    mode = 'lines+markers',
-    marker = {'color':pink, 'size': 10},
-    marker_symbol= dmw_at.symbol.to_list()
-))
-
-fig.add_trace(pgo.Scatterpolar(
-    r=smw_at.AUC,
-    theta=smw_at['markers'],
-    fill='toself',
-    name='sMW vs about-task',
-    mode = 'lines+markers',
-    marker = {'color':orange, 'size': 10},
-    marker_symbol= smw_at.symbol.to_list()
-))
-
-
-
-
-fig.update_layout(
-    title="All against About-task for Significant markers",
-#     legend_title="Classification",
-    width=600,
-    height=600,
-    template = 'plotly_white',
-    polar=dict(
-    radialaxis=dict(
-    title = 'AUC',
-      visible=True,
-        range = [0.35,0.6]
-    ),
-  ),
-    showlegend=True
-)
-
-fig.show()
-# pio.write_json(fig, 'Figs/radar_auc_significant.plotly')
-
-
 df_ot= df_all_self.query("balance == 'unbalance'").query(f"markers in {['t_n_mean', 't_n_std', 't_mean', 't_std']}") #'p_e_8_mean', 'p_e_8_std', 'wSMI_8_mean', 'wSMI_8_std'
 fig = px.bar(df_ot, x = 'comparison', y='AUC', facet_row = 'markers', color = 'significant', color_discrete_sequence = [lblue, green, pink], 
                          category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']})
@@ -782,7 +693,8 @@ fig.add_trace(pgo.Scatterpolar(
     theta=distracted_dmw['markers'],
     fill='toself',
     name= 'dMW vs distracted', 
-    marker = {'color':lblue, 'size': 10},
+    marker = {'color':orange, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(orange), 0.2)}",
     marker_symbol= distracted_dmw.symbol.to_list()
 ))
 
@@ -791,7 +703,8 @@ fig.add_trace(pgo.Scatterpolar(
     theta=distracted_smw['markers'],
     fill='toself',
     name='sMW vs distracted',
-    marker = {'color':pink, 'size': 10},
+    marker = {'color':green, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(green), 0.2)}",
     marker_symbol= distracted_smw.symbol.to_list()
 ))
 
@@ -800,7 +713,8 @@ fig.add_trace(pgo.Scatterpolar(
     theta=dmw_smw['markers'],
     fill='toself',
     name='sMW vs dMW',
-    marker = {'color':orange, 'size': 10},
+    marker = {'color':lblue, 'size': 10},
+    fillcolor= f"rgba{(*hex_to_rgb(lblue), 0.2)}",
     marker_symbol= dmw_smw.symbol.to_list()
 ))
 
@@ -810,21 +724,32 @@ fig.add_trace(pgo.Scatterpolar(
 fig.update_layout(
 #     title="All Off-task against all for Significant markers",
 #     legend_title="Classification",
-    width=600,
-    height=600,
+    width=800,
+    height=800,
     template = 'plotly_white',
     polar=dict(
-    radialaxis=dict(
-    title = 'AUC',
-      visible=True,
-        range = [0.35,0.65]
-    ),
-  ),
+        radialaxis=dict(
+            title = 'AUC',
+            visible=True,
+            range = [0.35,0.65], 
+             showticklabels = True,
+#             tickmode = 'linear',
+            ),
+        
+        ),
     showlegend=True
 )
 
 fig.show()
-# pio.write_json(fig, 'Figs/radar_auc_significant.plotly')
+pio.write_json(fig, 'Figs/radar_auc_off_task.plotly')
+
+
+# segment_mind_roc = pd.read_csv('Data/univariate_roc_mind_segment.csv')
+ot_contrasts = ['about-task vs on-task','distracted vs on-task', 'dMW vs on-task', 'sMW vs on-task']
+
+
+plot_univariate(df = df_all_probe.query("balance == 'over-sample'"), contrast = ot_contrasts[3], label =['sMW', 'on-task'] , color = pink)
+
 
 
 mind_states = ['about-task', 'distracted', 'dMW', 'sMW']
