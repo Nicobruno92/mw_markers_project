@@ -720,7 +720,7 @@ def multivariate_classifier(
     if model == 'forest':
         pipe_cv.fit(X, y)
         variable_importance = pipe_cv.steps[-1][-1].feature_importances_
-        sorter = variable_importance.argsort()
+        # sorter = variable_importance.argsort()
 
         feat_import = pd.DataFrame(np.array([features,variable_importance]).T, 
                                    columns = ['features', 'value']).sort_values('value', ascending = False)
