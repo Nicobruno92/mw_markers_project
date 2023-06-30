@@ -1,0 +1,15 @@
+﻿Participant,Nb,Epoch type,Bad channels,ICA EOG component,ICA ECG component,Observations
+V007,0,Evoked,"P2, PO4",0,,
+V007,0,pseudo-rs,,,,
+V008,1,Evoked,"FT7, Fz, T7",2,8,
+V009,2,Evoked,"P2, PO4, TP7",0,,
+V010,3,Evoked,P2,"0, 6",,Frontal Ch are bad
+V011,4,Evoked,,"0, 1, 3, 8",,Frontal Ch are really really bad
+V012,5,Evoked,,2,,Too few epochs
+V013,6,Evoked,"AF7, TP7",0,,
+V014,7,Evoked,"F1, PO4","0, 11",,
+V018,8,Evoked,"AF7, AF8, F1, F2, FP2, P2","0, 1",,Frontal Ch are really really bad/ Too few epochs
+V019,9,Evoked,"AF7, FP1, FP2, FT8, P2, P7",,,Error in find events
+V020,10,Evoked,"AF7, AF8, F3, F5, F7, F8, FC6","10, 4",,Horrible
+V021,11,Evoked,"CP4, CPz, FC2","0, 5",,
+V022,12,Evoked,"FT8, P2, P9, T7",,,
