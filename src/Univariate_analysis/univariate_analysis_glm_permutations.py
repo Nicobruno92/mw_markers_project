@@ -107,9 +107,10 @@ df_markers = (df
 df_markers['segment'] = df_markers['segment'].str.replace('s', '').astype(int)
 
 # %%
-def perform_permutation(formula, df_train, df_test, y_test):
-    y_perm = np.random.permutation(df_train['mind2_numeric'])
-    model_perm = Lmer(formula, data=df_train.assign(mind2_numeric=y_perm), family="binomial")
+def perform_permutation(formula, df_train, df_test, y_test, label):
+    y_perm = np.random.permutation(df_train[label])
+    df_train[label] = y_perm
+    model_perm = Lmer(formula, data=df_train, family="binomial")
     model_perm.fit(verbose=False, summary = False)
 
     # Make predictions and compute AUC for permuted labels
@@ -118,7 +119,7 @@ def perform_permutation(formula, df_train, df_test, y_test):
     return perm_auc
 
 # Execute the loop in parallel
-n_permutations = 1  # You can adjust this
+n_permutations = 500  # You can adjust this
 
 # %% [markdown]
 # # By Segment Univariate analyses
@@ -203,7 +204,7 @@ for marker in tqdm(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segme
         auc_scores.append(auc)
         
         perm_auc_scores = Parallel(n_jobs=-1)(
-                                delayed(perform_permutation)(formula, df_train, df_test, y_test)
+                                delayed(perform_permutation)(formula, df_train, df_test, y_test, label = 'mind2_numeric')
                                 for _ in range(n_permutations)
                             )
         
@@ -356,8 +357,8 @@ for marker in tqdm(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment']
     
     # Stratified KFold for ROC AUC
     skf = StratifiedKFold(n_splits=5)
-    X = df_mind[marker].values.reshape(-1, 1)
-    y = df_mind['mind_numeric']
+    X = df_mw[marker].values.reshape(-1, 1)
+    y = df_mw['mind_numeric']
     auc_scores = []
     perm_auc_scores_all = []
     
@@ -375,7 +376,7 @@ for marker in tqdm(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment']
         auc_scores.append(auc)
         
         perm_auc_scores = Parallel(n_jobs=-1)(
-                                delayed(perform_permutation)(formula, df_train, df_test, y_test)
+                                delayed(perform_permutation)(formula, df_train, df_test, y_test, label = 'mind_numeric')
                                 for _ in range(n_permutations)
                             )
         
