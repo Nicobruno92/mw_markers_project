@@ -1,0 +1,9 @@
+use_standardization: True
+use_pca: False
+n_estimators: 154
+max_depth: 24
+min_samples_split: 2
+min_samples_leaf: 4
+max_features: sqrt
+bootstrap: False
+criterion: entropy

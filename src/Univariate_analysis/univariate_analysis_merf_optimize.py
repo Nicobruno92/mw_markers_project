@@ -211,6 +211,14 @@ df_mind_filtered = replace_outliers_with_participant_mean(df_mind, columns_to_ch
 
 df_mind = df_mind_filtered
 
+def filter_participants(group):
+    counts = group['mind2_numeric'].value_counts()
+    # Check if there is only one level of 'mind2' for the participant
+    if len(counts) == 1:
+        return False
+    return all(count >= 1 for count in counts)
+df_mind = df_mind.groupby('participant').filter(filter_participants)
+
 # %%
 def objective(trial, df_mind):
     # Suggest hyperparameters
@@ -222,6 +230,8 @@ def objective(trial, df_mind):
     # Initialize results DataFrame for this trial
     results_df_trial = pd.DataFrame(columns=['Marker', 'AUC_mean', 'AUC_std', 'AUC_sem', 'AUC_range'])
     total_auc = 0
+    
+    marker_auc_dict = {}
 
     # Loop through each marker
     for marker in tqdm(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis=1).columns, desc="Markers"):
@@ -233,7 +243,7 @@ def objective(trial, df_mind):
         clusters = df_marker['participant']
         y = df_marker['mind2_numeric']
     
-        n_splits = 5
+        n_splits = 4
         group_kfold = GroupKFold(n_splits=n_splits)
 
         # Placeholder for AUC scores and optimal cutoffs
@@ -284,6 +294,8 @@ def objective(trial, df_mind):
         auc_std = np.std(auc_scores)
         auc_sem = auc_std / np.sqrt(len(auc_scores))
         auc_range = np.ptp(auc_scores)
+        
+        marker_auc_dict[marker] = auc_mean
 
         # Append results to trial's DataFrame
         results_df_trial = results_df_trial.append({
@@ -297,14 +309,25 @@ def objective(trial, df_mind):
         # Update total AUC
         total_auc += auc_mean
 
+    # Sort markers by AUC and select top 5
+    top_markers = sorted(marker_auc_dict, key=marker_auc_dict.get, reverse=True)[:5]
+
+    # Calculate average AUC of top 5 markers
+    average_top_auc = np.mean([marker_auc_dict[marker] for marker in top_markers])
+
+    # Store top 5 markers in the trial's DataFrame
+    trial.set_user_attr("top_markers", top_markers)
     # Attach the trial's DataFrame to the trial as a user attribute
     trial.set_user_attr("results_df", results_df_trial)
 
-    # Calculate and return the average AUC
-    return total_auc / len(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis=1).columns)
+    # Return the average AUC of the top 5 markers for optimization
+    return average_top_auc
 
-# Run Optuna study
-study = optuna.create_study(direction="maximize")
+
+# Construct the file path for the study database
+study_db_path = os.path.join(results_path, 'univariate_merf_mind_study.db')
+# Use the SQLite database at the specified path for storage
+study = optuna.create_study(direction="maximize", study_name="mind_study", storage=f'sqlite:///{study_db_path}', load_if_exists=True)
 study.optimize(lambda trial: objective(trial, df_mind), n_trials=50)
 
 # Retrieve the best trial's results DataFrame
@@ -321,6 +344,8 @@ best_params_path = os.path.join(results_path, 'univariate_merf_mind_best_params.
 with open(best_params_path, 'w') as file:
     for key, value in best_trial.params.items():
         file.write(f'{key}: {value}\n')
+
+
 
 print(f"Results of the best trial saved in: {best_results_csv_path}")
 
@@ -450,6 +475,15 @@ df_mw_filtered = replace_outliers_with_participant_mean(df_mw, columns_to_check,
 df_mw = df_mw_filtered
 
 
+def filter_participants(group):
+    counts = group['mind_numeric'].value_counts()
+    # Check if there is only one level of 'mind2' for the participant
+    if len(counts) == 1:
+        return False
+    return all(count >= 1 for count in counts)
+df_mw = df_mw.groupby('participant').filter(filter_participants)
+
+
 # %%
 def objective(trial, df_mw):
     # Suggest hyperparameters
@@ -461,6 +495,8 @@ def objective(trial, df_mw):
     # Initialize results DataFrame for this trial
     results_df_trial = pd.DataFrame(columns=['Marker', 'AUC_mean', 'AUC_std', 'AUC_sem', 'AUC_range'])
     total_auc = 0
+    
+    marker_auc_dict = {}
 
     # Loop through each marker
     for marker in tqdm(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis=1).columns, desc="Markers"):
@@ -472,7 +508,7 @@ def objective(trial, df_mw):
         clusters = df_marker['participant']
         y = df_marker['mind_numeric']
     
-        n_splits = 5
+        n_splits = 4
         group_kfold = GroupKFold(n_splits=n_splits)
 
         # Placeholder for AUC scores and optimal cutoffs
@@ -523,6 +559,9 @@ def objective(trial, df_mw):
         auc_std = np.std(auc_scores)
         auc_sem = auc_std / np.sqrt(len(auc_scores))
         auc_range = np.ptp(auc_scores)
+        
+
+        marker_auc_dict[marker] = auc_mean
 
         # Append results to trial's DataFrame
         results_df_trial = results_df_trial.append({
@@ -539,11 +578,23 @@ def objective(trial, df_mw):
     # Attach the trial's DataFrame to the trial as a user attribute
     trial.set_user_attr("results_df", results_df_trial)
 
-    # Calculate and return the average AUC
-    return total_auc / len(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis=1).columns)
+    # Sort markers by AUC and select top 5
+    top_markers = sorted(marker_auc_dict, key=marker_auc_dict.get, reverse=True)[:5]
 
-# Run Optuna study
-study = optuna.create_study(direction="maximize")
+    # Calculate average AUC of top 5 markers
+    average_top_auc = np.mean([marker_auc_dict[marker] for marker in top_markers])
+
+    # Store top 5 markers in the trial's DataFrame
+    trial.set_user_attr("top_markers", top_markers)
+
+    # Return the average AUC of the top 5 markers for optimization
+    return average_top_auc
+
+# Construct the file path for the study database
+study_db_path = os.path.join(results_path, 'univariate_merf_mw_study.db')
+# Use the SQLite database at the specified path for storage
+study = optuna.create_study(direction="maximize", study_name="mw_study", storage=f'sqlite:///{study_db_path}', load_if_exists=True)
+
 study.optimize(lambda trial: objective(trial, df_mw), n_trials=50)
 
 # Retrieve the best trial's results DataFrame

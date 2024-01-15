@@ -1,0 +1,10 @@
+n_estimators: 43
+max_depth: 30
+min_samples_split: 11
+min_samples_leaf: 7
+max_features: 0.3280227783291878
+criterion: squared_error
+bootstrap: True
+min_impurity_decrease: 0.035046571843086446
+gll_early_stop_threshold: 0.053605562676724665
+max_iterations: 51

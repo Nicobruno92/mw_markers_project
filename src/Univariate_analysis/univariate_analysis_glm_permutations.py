@@ -24,6 +24,8 @@ from statsmodels.stats.multitest import multipletests
 
 from joblib import Parallel, delayed
 
+np.random.seed(42)
+
 # %%
 # plotting parameters
 grey = "#21201F"
@@ -59,11 +61,11 @@ sns.set_palette(sns.color_palette(nt_colors))
 
 # %% [markdown]
 # # Load Data
-metric = 'kappa'
+# metric = 'kappa'
 # metric = 'f1'
 # metric = 'auc'
 # Execute the loop in parallel
-n_permutations = 500  # You can adjust this
+n_permutations = 5000  # You can adjust this
 
 # %%
 data_path = "./Data/"
@@ -113,6 +115,7 @@ df_markers['segment'] = df_markers['segment'].str.replace('s', '').astype(int)
 
 
 # %%
+
 from scipy.stats import zscore
 def replace_outliers_with_participant_mean(df, columns, participant_column='participant', z_threshold=3):
     for col in columns:
@@ -136,25 +139,24 @@ def replace_outliers_with_participant_mean(df, columns, participant_column='part
                 
     return df
 
-def perform_permutation(formula, df_train, df_test, y_test, label, metric = 'auc'):
-    y_perm = np.random.permutation(df_train[label])
+def perform_permutation(formula, df_train, df_test, y_test, original_labels, label,):
+    # Make a copy of the original labels
+    y_perm = np.random.permutation(original_labels)
     df_train[label] = y_perm
     model_perm = Lmer(formula, data=df_train, family="binomial")
-    model_perm.fit(verbose=False, summary = False)
+    model_perm.fit(verbose=False, summary=False)
 
     # Make predictions and compute AUC for permuted labels
     predicted_probabilities_perm = model_perm.predict(df_test, use_rfx=True, verify_predictions=False)
     predicted_labels = [1 if prob > 0.5 else 0 for prob in predicted_probabilities_perm]
     
-    if metric == 'auc':
-        perm_auc = roc_auc_score(y_test, predicted_probabilities_perm)
-        return perm_auc
-    elif metric == 'f1':
-        perm_f1 = f1_score(y_test, predicted_labels)
-        return perm_f1
-    elif metric == 'kappa':
-        kappa = cohen_kappa_score(y_test, predicted_labels)
-        return kappa
+    
+    perm_auc = roc_auc_score(y_test, predicted_probabilities_perm)
+    perm_f1 = f1_score(y_test, predicted_labels)
+    perm_kappa = cohen_kappa_score(y_test, predicted_labels)
+    
+    return perm_auc, perm_f1, perm_kappa
+
 
 # %% [markdown]
 # # By Segment Univariate analyses
@@ -207,10 +209,18 @@ df_mind['mind2_numeric'] = (df_mind['mind2'] == 'mw').astype(int)
 # Columns to remove outliers from
 columns_to_check = df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis = 1).columns
 
+def filter_participants(group):
+    counts = group['mind2_numeric'].value_counts()
+    # Check if there is only one level of 'mind2' for the participant
+    if len(counts) == 1:
+        return False
+    return all(count >= 1 for count in counts)
+df_mind = df_mind.groupby('participant').filter(filter_participants)
+
 # Remove outliers
 df_mind_filtered = replace_outliers_with_participant_mean(df_mind, columns_to_check, z_threshold=3)
 
-df_mind = df_mind_filtered
+# df_mind = df_mind_filtered
 # %% [markdown]
 # ## dMW Vs sMW
 # This will be only performed in SC as they have more trials
@@ -260,187 +270,50 @@ df_mw.to_csv(os.path.join(results_path,'data_mw.csv'))
 # Columns to remove outliers from
 columns_to_check = df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis = 1).columns
 
+def filter_participants(group):
+    counts = group['mind_numeric'].value_counts()
+    # Check if there is only one level of 'mind2' for the participant
+    if len(counts) == 1:
+        return False
+    return all(count >= 1 for count in counts)
+df_mw = df_mw.groupby('participant').filter(filter_participants)
 # Remove outliers
 df_mw_filtered = replace_outliers_with_participant_mean(df_mw, columns_to_check, z_threshold=3)
 
-df_mw = df_mw_filtered
+# df_mw = df_mw_filtered
 
 # %%
-metrics = ['auc', 'f1', 'kappa']
-for metric in metrics:
-    # results_df = pd.DataFrame(columns=['Marker', 'Log-Likelihood', 'AIC','Estimate', 'P_val', 
-    #                                 'score_mean', 'score_std', 'score_sem', 'score_range', 'perm_score','perms_score_std','perms_score_all'])
-
-
-    # for marker in tqdm(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis = 1).columns, desc="Markers"):
-    #     formula = f"mind2_numeric ~ {marker} + (1|participant)"
-        
-    #     other_markers = np.setdiff1d(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis = 1).columns, marker)
-    #     df_marker = df_mind.drop(other_markers, axis = 1)
-        
-    #     # Fitting the LMER model
-    #     model = Lmer(formula, data=df_marker, family="binomial")
-    #     model.fit(verbose = False, summary = False)
-        
-    #     # Stratified KFold for ROC AUC
-    #     # skf = StratifiedKFold(n_splits=5)
-    #     X = df_marker[marker].values.reshape(-1, 1)
-    #     y = df_marker['mind2_numeric']
-    #     scores = []
-    #     perm_scores_all = []
-        
-    #     n_splits = 5
-    #     group_kfold = GroupKFold(n_splits=n_splits)
-
-    #     # Assuming df_mw['participant'] contains the participant IDs
-    #     groups = df_marker['participant'].values
-
-    #     for train_index, test_index in group_kfold.split(X, y, groups):
-    #         df_train = df_marker.iloc[train_index]
-    #         # df_train[marker] = StandardScaler().fit_transform(df_train[marker].values.reshape(-1, 1))
-    #         df_test = df_marker.iloc[test_index]
-    #         # df_test[marker] = StandardScaler().fit_transform(df_test[marker].values.reshape(-1, 1))
-    #         y_test = y[test_index]
-    #         model = Lmer(formula, data=df_train, family="binomial")
-    #         model.fit(verbose = False, summary = False)
-            
-
-    #         predicted_probabilities = model.predict(df_test, use_rfx=True, verify_predictions=False)
-    #         predicted_labels = [1 if prob > 0.5 else 0 for prob in predicted_probabilities]
-
-    #         if metric == 'auc':
-    #             auc = roc_auc_score(y_test, predicted_probabilities)
-    #             scores.append(auc)
-    #         elif metric == 'f1':
-    #             f1 = f1_score(y_test, predicted_labels)
-    #             scores.append(f1)
-    #         elif metric == 'kappa':
-    #             kappa = cohen_kappa_score(y_test, predicted_labels)
-    #             scores.append(kappa)
-            
-    #         perm_scores = Parallel(n_jobs=-1)(
-    #                                 delayed(perform_permutation)(formula, df_train, df_test, y_test, label = 'mind2_numeric', metric = metric)
-    #                                 for _ in range(n_permutations)
-    #                             )
-            
-    #         # Add the list of scores for this fold to the master list
-    #         perm_scores_all.append(perm_scores)
-
-    #     # Convert 2D list to DataFrame
-    #     df_perm = pd.DataFrame(perm_scores_all).T
-
-    #     # Average across folds for each permutation run
-    #     df_perm['Mean_score'] = df_perm.mean(axis=1)
-            
-        
-        
-    #     # Compute AUC statistics
-    #     score_mean = np.mean(scores)
-    #     score_std = np.std(scores)
-    #     score_sem = score_std / np.sqrt(len(scores))
-    #     score_range = np.ptp(scores)
-        
-        
-    #     pvalue = np.mean(df_perm['Mean_score'] >= score_mean)
-        
-    #     # Save to DataFrame
-    #     results_df = results_df.append({
-    #         'Marker': marker,
-    #         'Log-Likelihood': model.logLike,
-    #         'AIC': model.AIC,
-    #         'Estimate': model.coefs['Estimate'][0],
-    #         'P_val': pvalue,
-    #         f'{metric}_mean': score_mean,
-    #         f'{metric}_std': score_std,
-    #         f'{metric}_sem': score_sem,
-    #         f'{metric}_range': score_range,
-    #         f'{metric}_score': df_perm['Mean_score'].mean(), 
-    #         f'{metric}_score_std': df_perm['Mean_score'].std(),
-    #         f'{metric}_score_all': df_perm['Mean_score'].values,
-    #     }, ignore_index=True)
-
-
-
-
-
-    # mind_glmm = results_df.assign(
-    #                     p_corrected = lambda df: multipletests(df.P_val, method = 'fdr_bh')[1],
-    #                     significant = lambda df: np.select([(df.P_val < 0.05) & (df.p_corrected < 0.05), (df.P_val < 0.05) & (df.p_corrected > 0.05),  
-    #                                                 (df.P_val > 0.05) & (df.p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05'])
-    #                 )
-
-    # mind_glmm.to_csv(os.path.join(results_path,f'univariate_glmm_mind_perm_{metric}.csv'))
-
-
-    # # %%
-    # # segment_mind_roc = segment_mind_roc.sort_values(by = 'AUC', ascending = False).head(10).append(segment_mind_roc.sort_values(by = 'AUC', ascending = False).tail(10))
-
-    # fig = px.scatter(mind_glmm.sort_values(by = f'{metric}_mean'),x = f'{metric}_mean', y = 'Marker', template = "plotly_white", symbol = 'significant', 
-    #                 symbol_sequence = ['circle-open','circle','hexagram' ],
-    # #                  color = 'significant',
-    #                 color_discrete_sequence = [pink, green,orange, pink], 
-                    
-    #                 category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
-    #                 labels = {'score_mean': f'{metric}', 'significant': 'Statistical Significance', 'markers':''}
-    #                 )
-    # fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
-    # fig.update_traces(marker=dict(size = 13))
-
-    # fig.update_layout(
-    #     width=850,
-    #     height=1300,
-    # #     autosize = True, 
-    #     template = 'plotly_white',
-    #         font=dict(
-    #         family="Times new roman",
-    #         size=20,
-    #         color="black"
-    #     ),
-    #     xaxis = dict(
-    #             visible=True,
-    #             # range = [0.45,0.80], 
-    #             tickfont = {"size": 20},
-    #         ),
-    #     yaxis = dict(
-    #         tickfont = {"size": 20},
-    #         autorange = False,    
-    #         automargin = True,
-    #         range = [-1,len(mind_glmm)],
-    #         dtick = 1
-    #         ),
-    #     showlegend=True, 
-
-    # )
-
-    # # fig.show()
-
-    # fig.write_image(os.path.join(fig_path,f'univariate_glmm_mind_perm_{metric}.png'))
-    # fig.write_image(os.path.join(fig_path,f'univariate_glmm_mind_perm_{metric}.pdf'))
-
-
-    # %%
+folds = [4,5,6,]
+for k in folds:
+    n_splits = k
+    
     results_df = pd.DataFrame(columns=['Marker', 'Log-Likelihood', 'AIC','Estimate', 'P_val', 
                                     'score_mean', 'score_std', 'score_sem', 'score_range', 'perm_score','perms_score_std','perms_score_all'])
 
 
-    for marker in tqdm(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis = 1).columns, desc="Markers"):
-        formula = f"mind_numeric ~ {marker} + (1|participant)"
+    for marker in tqdm(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis = 1).columns, desc="Markers"):
+        formula = f"mind2_numeric ~ {marker} + (1|participant)"
         
-        other_markers = np.setdiff1d(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis = 1).columns, marker)
-        df_marker = df_mw.drop(other_markers, axis = 1)
+        other_markers = np.setdiff1d(df_mind.drop(['mind2', 'mind2_numeric', 'participant', 'segment'], axis = 1).columns, marker)
+        df_marker = df_mind.drop(other_markers, axis = 1).reset_index()
         
         # Fitting the LMER model
-        model = Lmer(formula, data=df_mw, family="binomial")
-        model.fit(verbose = False, summary = False)
+        base_model = Lmer(formula, data=df_marker, family="binomial")
+        base_model.fit(verbose = False, summary = False)
         
         # Stratified KFold for ROC AUC
         # skf = StratifiedKFold(n_splits=5)
         X = df_marker[marker].values.reshape(-1, 1)
-        y = df_marker['mind_numeric']
-        scores = []
-        perm_scores_all = []
+        y = df_marker['mind2_numeric']
         
-        n_splits = 5
+        auc_scores = []
+        f1_scores = []
+        kappa_scores = []
+        
+        # Initialize the lists outside the loop
+        perm_auc, perm_f1, perm_kappa = [], [], []
+        
+        # n_splits = 5
         group_kfold = GroupKFold(n_splits=n_splits)
 
         # Assuming df_mw['participant'] contains the participant IDs
@@ -452,6 +325,9 @@ for metric in metrics:
             df_test = df_marker.iloc[test_index]
             # df_test[marker] = StandardScaler().fit_transform(df_test[marker].values.reshape(-1, 1))
             y_test = y[test_index]
+            # Save original labels
+            original_labels = df_train['mind2_numeric'].copy()
+            
             model = Lmer(formula, data=df_train, family="binomial")
             model.fit(verbose = False, summary = False)
             
@@ -459,112 +335,334 @@ for metric in metrics:
             predicted_probabilities = model.predict(df_test, use_rfx=True, verify_predictions=False)
             predicted_labels = [1 if prob > 0.5 else 0 for prob in predicted_probabilities]
 
-            if metric == 'auc':
-                auc = roc_auc_score(y_test, predicted_probabilities)
-                scores.append(auc)
-            elif metric == 'f1':
-                f1 = f1_score(y_test, predicted_labels)
-                scores.append(f1)
-            elif metric == 'kappa':
-                kappa = cohen_kappa_score(y_test, predicted_labels)
-                scores.append(kappa)
+            auc = roc_auc_score(y_test, predicted_probabilities)
+            auc_scores.append(auc)
+            f1 = f1_score(y_test, predicted_labels)
+            f1_scores.append(f1)
+            kappa = cohen_kappa_score(y_test, predicted_labels)
+            kappa_scores.append(kappa)
             
+            # Permutation test
             perm_scores = Parallel(n_jobs=-1)(
-                                    delayed(perform_permutation)(formula, df_train, df_test, y_test, label = 'mind_numeric', metric = metric)
-                                    for _ in range(n_permutations)
-                                )
+                delayed(perform_permutation)(formula, df_train.copy(), df_test, y_test, original_labels, label='mind2_numeric')
+                for _ in range(n_permutations)
+            )
+
+            # Append the mean of the scores
+            perm_auc.append([score[0] for score in perm_scores])
+            perm_f1.append([score[1] for score in perm_scores])
+            perm_kappa.append([score[2] for score in perm_scores])
             
-            # Add the list of scores for this fold to the master list
-            perm_scores_all.append(perm_scores)
 
         # Convert 2D list to DataFrame
-        df_perm = pd.DataFrame(perm_scores_all).T
+        df_perm_auc = pd.DataFrame(perm_auc).T
+        df_perm_f1 = pd.DataFrame(perm_f1).T
+        df_perm_kappa = pd.DataFrame(perm_kappa).T
+        
 
         # Average across folds for each permutation run
-        df_perm['Mean_score'] = df_perm.mean(axis=1)
+        df_perm_auc['Mean_score'] = df_perm_auc.mean(axis=1)
+        df_perm_f1['Mean_score'] = df_perm_f1.mean(axis=1)
+        df_perm_kappa['Mean_score'] = df_perm_kappa.mean(axis=1)
             
         
-        
         # Compute AUC statistics
-        score_mean = np.mean(scores)
-        score_std = np.std(scores)
-        score_sem = score_std / np.sqrt(len(scores))
-        score_range = np.ptp(scores)
+        auc_mean = np.mean(auc_scores)
+        auc_std = np.std(auc_scores)
+        auc_pvalue = np.mean(df_perm_auc['Mean_score'] >= auc_mean)
         
+        # Compute F1 statistics
+        f1_mean = np.mean(f1_scores)
+        f1_std = np.std(f1_scores)
+        f1_pvalue = np.mean(df_perm_f1['Mean_score'] >= f1_mean)
         
-        pvalue = np.mean(df_perm['Mean_score'] >= score_mean)
+        # Compute F1 statistics
+        kappa_mean = np.mean(kappa_scores)
+        kappa_std = np.std(kappa_scores)
+        kappa_pvalue = np.mean(df_perm_kappa['Mean_score'] >= kappa_mean)
+        
         
         # Save to DataFrame
         results_df = results_df.append({
             'Marker': marker,
-            'Log-Likelihood': model.logLike,
-            'AIC': model.AIC,
-            'Estimate': model.coefs['Estimate'][0],
-            'P_val': pvalue,
-            f'{metric}_mean': score_mean,
-            f'{metric}_std': score_std,
-            f'{metric}_sem': score_sem,
-            f'{metric}_range': score_range,
-            f'{metric}_score': df_perm['Mean_score'].mean(), 
-            f'{metric}_score_std': df_perm['Mean_score'].std(),
-            f'{metric}_score_all': df_perm['Mean_score'].values,
+            'Log-Likelihood': base_model.logLike,
+            'AIC': base_model.AIC,
+            'Glmm_pval': base_model.coefs['P-val'][0],
+            'Estimate': base_model.coefs['Estimate'][0],
+            'AUC_P_val': auc_pvalue,
+            'AUC_mean': auc_mean,
+            'AUC_std': auc_std,
+            'F1_P_val': f1_pvalue,
+            'F1_mean': f1_mean,
+            'F1_std': f1_std,
+            'Kappa_P_val': kappa_pvalue,
+            'Kappa_mean': kappa_mean,
+            'Kappa_std': kappa_std,
+            'perm_auc_mean': df_perm_auc['Mean_score'].mean(),
+            'perm_auc_all': df_perm_auc['Mean_score'].values,
+            'perm_f1_mean': df_perm_f1['Mean_score'].mean(),
+            'perm_f1_all': df_perm_f1['Mean_score'].values,
+            'perm_kappa_mean': df_perm_kappa['Mean_score'].mean(),
+            'perm_kappa_all': df_perm_kappa['Mean_score'].values,
+        }, ignore_index=True)
+
+
+
+    mind_glmm = results_df.assign(
+                        GLMM_p_corrected = lambda df: multipletests(df.Glmm_pval, method = 'fdr_bh')[1],
+                        GLMM_significant = lambda df: np.select([(df.Glmm_pval < 0.05) & (df.GLMM_p_corrected < 0.05), (df.Glmm_pval < 0.05) & (df.GLMM_p_corrected > 0.05),
+                                                    (df.Glmm_pval > 0.05) & (df.GLMM_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+        
+                        AUC_p_corrected = lambda df: multipletests(df.AUC_P_val, method = 'fdr_bh')[1],
+                        AUC_significant = lambda df: np.select([(df.AUC_P_val < 0.05) & (df.AUC_p_corrected < 0.05), (df.AUC_P_val < 0.05) & (df.AUC_p_corrected > 0.05),  
+                                                    (df.AUC_P_val > 0.05) & (df.AUC_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                        F1_p_corrected = lambda df: multipletests(df.F1_P_val, method = 'fdr_bh')[1],
+                        F1_significant = lambda df: np.select([(df.F1_P_val < 0.05) & (df.F1_p_corrected < 0.05), (df.F1_P_val < 0.05) & (df.F1_p_corrected > 0.05),  
+                                                    (df.F1_P_val > 0.05) & (df.F1_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                        Kappa_p_corrected = lambda df: multipletests(df.Kappa_P_val, method = 'fdr_bh')[1],
+                        Kappa_significant = lambda df: np.select([(df.Kappa_P_val < 0.05) & (df.Kappa_p_corrected < 0.05), (df.Kappa_P_val < 0.05) & (df.Kappa_p_corrected > 0.05),
+                                                    (df.Kappa_P_val > 0.05) & (df.Kappa_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05'])
+                    )
+
+    mind_glmm.to_csv(os.path.join(results_path,f'univariate_glmm_mind_perm_k{n_splits}.csv'))
+
+
+    # %%
+    # segment_mind_roc = segment_mind_roc.sort_values(by = 'AUC', ascending = False).head(10).append(segment_mind_roc.sort_values(by = 'AUC', ascending = False).tail(10))
+    metrics = ['AUC', 'F1', 'Kappa']
+    for metric in metrics:
+        fig = px.scatter(mind_glmm.sort_values(by = f'{metric}_mean'),x = f'{metric}_mean', y = 'Marker', template = "plotly_white", symbol = f'{metric}_significant', 
+                        symbol_sequence = ['circle-open','circle','hexagram' ],
+        #                  color = 'significant',
+                        color_discrete_sequence = [pink, green,orange, pink], 
+                        
+                        category_orders = {'{metric}_significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
+                        labels = {f'{metric}_mean': f'{metric}', 'significant': 'Statistical Significance', 'markers':''}
+                        )
+        fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
+        fig.update_traces(marker=dict(size = 13))
+
+        fig.update_layout(
+            width=850,
+            height=1300,
+        #     autosize = True, 
+            template = 'plotly_white',
+                font=dict(
+                family="Times new roman",
+                size=20,
+                color="black"
+            ),
+            xaxis = dict(
+                    visible=True,
+                    # range = [0.45,0.80], 
+                    tickfont = {"size": 20},
+                ),
+            yaxis = dict(
+                tickfont = {"size": 20},
+                autorange = False,    
+                automargin = True,
+                range = [-1,len(mind_glmm)],
+                dtick = 1
+                ),
+            showlegend=True, 
+
+        )
+
+        # fig.show()
+
+        fig.write_image(os.path.join(fig_path,f'univariate_glmm_mind_perm_{metric}_k{n_splits}.png'))
+        fig.write_image(os.path.join(fig_path,f'univariate_glmm_mind_perm_{metric}_k{n_splits}.pdf'))
+
+
+# %%
+
+
+    results_df = pd.DataFrame(columns=['Marker', 'Log-Likelihood', 'AIC','Estimate', 'P_val', 
+                                    'score_mean', 'score_std', 'score_sem', 'score_range', 'perm_score','perms_score_std','perms_score_all'])
+
+
+    for marker in tqdm(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis = 1).columns, desc="Markers"):
+        formula = f"mind_numeric ~ {marker} + (1|participant)"
+        
+        other_markers = np.setdiff1d(df_mw.drop(['mind', 'mind_numeric', 'participant', 'segment'], axis = 1).columns, marker)
+        df_marker = df_mw.drop(other_markers, axis = 1).reset_index()
+        
+        # Fitting the LMER model
+        base_model = Lmer(formula, data=df_mw, family="binomial")
+        base_model.fit(verbose = False, summary = False)
+        
+        # Stratified KFold for ROC AUC
+        # skf = StratifiedKFold(n_splits=5)
+        X = df_marker[marker].values.reshape(-1, 1)
+        y = df_marker['mind_numeric']
+        scores = []
+        perm_scores_all = []
+
+        auc_scores = []
+        f1_scores = []
+        kappa_scores = []
+        # Initialize the lists outside the loop
+        perm_auc, perm_f1, perm_kappa = [], [], []
+        
+        # n_splits = 5
+        group_kfold = GroupKFold(n_splits=n_splits)
+
+        # Assuming df_mw['participant'] contains the participant IDs
+        groups = df_marker['participant'].values
+
+        for train_index, test_index in group_kfold.split(X, y, groups):
+            df_train = df_marker.iloc[train_index]
+            # df_train[marker] = StandardScaler().fit_transform(df_train[marker].values.reshape(-1, 1))
+            df_test = df_marker.iloc[test_index]
+            # df_test[marker] = StandardScaler().fit_transform(df_test[marker].values.reshape(-1, 1))
+            y_test = y[test_index]
+            # Save original labels
+            original_labels = df_train['mind_numeric'].copy()
+            
+            model = Lmer(formula, data=df_train, family="binomial")
+            model.fit(verbose = False, summary = False)
+            
+
+            predicted_probabilities = model.predict(df_test, use_rfx=True, verify_predictions=False)
+            predicted_labels = [1 if prob > 0.5 else 0 for prob in predicted_probabilities]
+
+            auc = roc_auc_score(y_test, predicted_probabilities)
+            auc_scores.append(auc)
+            f1 = f1_score(y_test, predicted_labels)
+            f1_scores.append(f1)
+            kappa = cohen_kappa_score(y_test, predicted_labels)
+            kappa_scores.append(kappa)
+            
+            # Permutation test
+            perm_scores = Parallel(n_jobs=-1)(
+                delayed(perform_permutation)(formula, df_train.copy(), df_test, y_test, original_labels, label='mind_numeric')
+                for _ in range(n_permutations)
+            )
+
+            # Append the mean of the scores
+            perm_auc.append([score[0] for score in perm_scores])
+            perm_f1.append([score[1] for score in perm_scores])
+            perm_kappa.append([score[2] for score in perm_scores])
+            
+
+        # Convert 2D list to DataFrame
+        df_perm_auc = pd.DataFrame(perm_auc).T
+        df_perm_f1 = pd.DataFrame(perm_f1).T
+        df_perm_kappa = pd.DataFrame(perm_kappa).T
+        
+
+        # Average across folds for each permutation run
+        df_perm_auc['Mean_score'] = df_perm_auc.mean(axis=1)
+        df_perm_f1['Mean_score'] = df_perm_f1.mean(axis=1)
+        df_perm_kappa['Mean_score'] = df_perm_kappa.mean(axis=1)
+            
+        
+        # Compute AUC statistics
+        auc_mean = np.mean(auc_scores)
+        auc_std = np.std(auc_scores)
+        auc_pvalue = np.mean(df_perm_auc['Mean_score'] >= auc_mean)
+        
+        # Compute F1 statistics
+        f1_mean = np.mean(f1_scores)
+        f1_std = np.std(f1_scores)
+        f1_pvalue = np.mean(df_perm_f1['Mean_score'] >= f1_mean)
+        
+        # Compute F1 statistics
+        kappa_mean = np.mean(kappa_scores)
+        kappa_std = np.std(kappa_scores)
+        kappa_pvalue = np.mean(df_perm_kappa['Mean_score'] >= kappa_mean)
+        
+        
+        # Save to DataFrame
+        results_df = results_df.append({
+            'Marker': marker,
+            'Log-Likelihood': base_model.logLike,
+            'AIC': base_model.AIC,
+            'Glmm_pval': base_model.coefs['P-val'][0],
+            'Estimate': base_model.coefs['Estimate'][0],
+            'AUC_P_val': auc_pvalue,
+            'AUC_mean': auc_mean,
+            'AUC_std': auc_std,
+            'F1_P_val': f1_pvalue,
+            'F1_mean': f1_mean,
+            'F1_std': f1_std,
+            'Kappa_P_val': kappa_pvalue,
+            'Kappa_mean': kappa_mean,
+            'Kappa_std': kappa_std,
+            'perm_auc_mean': df_perm_auc['Mean_score'].mean(),
+            'perm_auc_all': df_perm_auc['Mean_score'].values,
+            'perm_f1_mean': df_perm_f1['Mean_score'].mean(),
+            'perm_f1_all': df_perm_f1['Mean_score'].values,
+            'perm_kappa_mean': df_perm_kappa['Mean_score'].mean(),
+            'perm_kappa_all': df_perm_kappa['Mean_score'].values,
         }, ignore_index=True)
 
 
 
     mw_glmm = results_df.assign(
-                        p_corrected = lambda df: multipletests(df.P_val, method = 'fdr_bh')[1],
-                        significant = lambda df: np.select([(df.P_val < 0.05) & (df.p_corrected < 0.05), (df.P_val < 0.05) & (df.p_corrected > 0.05),  
-                                                    (df.P_val > 0.05) & (df.p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05'])
+                        GLMM_p_corrected = lambda df: multipletests(df.Glmm_pval, method = 'fdr_bh')[1],
+                        GLMM_significant = lambda df: np.select([(df.Glmm_pval < 0.05) & (df.GLMM_p_corrected < 0.05), (df.Glmm_pval < 0.05) & (df.GLMM_p_corrected > 0.05),
+                                                    (df.Glmm_pval > 0.05) & (df.GLMM_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                        
+                        AUC_p_corrected = lambda df: multipletests(df.AUC_P_val, method = 'fdr_bh')[1],
+                        AUC_significant = lambda df: np.select([(df.AUC_P_val < 0.05) & (df.AUC_p_corrected < 0.05), (df.AUC_P_val < 0.05) & (df.AUC_p_corrected > 0.05),  
+                                                    (df.AUC_P_val > 0.05) & (df.AUC_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                        F1_p_corrected = lambda df: multipletests(df.F1_P_val, method = 'fdr_bh')[1],
+                        F1_significant = lambda df: np.select([(df.F1_P_val < 0.05) & (df.F1_p_corrected < 0.05), (df.F1_P_val < 0.05) & (df.F1_p_corrected > 0.05),  
+                                                    (df.F1_P_val > 0.05) & (df.F1_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05']),
+                        Kappa_p_corrected = lambda df: multipletests(df.Kappa_P_val, method = 'fdr_bh')[1],
+                        Kappa_significant = lambda df: np.select([(df.Kappa_P_val < 0.05) & (df.Kappa_p_corrected < 0.05), (df.Kappa_P_val < 0.05) & (df.Kappa_p_corrected > 0.05),
+                                                    (df.Kappa_P_val > 0.05) & (df.Kappa_p_corrected > 0.05)], ['p < 0.05 FDR corrected','p < 0.05 uncorrected', 'p > 0.05'])
                         )
 
-    mw_glmm.to_csv(os.path.join(results_path,f'univariate_glmm_mw_perm_{metric}.csv'))
-
+    mw_glmm.to_csv(os.path.join(results_path,f'univariate_glmm_mw_perm_k{n_splits}.csv'))
 
     # %%
     # segment_mw_roc = segment_mw_roc.sort_values(by = 'score', ascending = False).head(10).append(segment_mw_roc.sort_values(by = 'score', ascending = False).tail(10))
 
-    fig = px.scatter(mw_glmm.sort_values(by = f'{metric}_mean'),x = f'{metric}_mean', y = 'Marker', template = "plotly_white", symbol = 'significant', 
-                    symbol_sequence = ['circle-open','circle','hexagram' ],
-    #                  color = 'significant',
-                    color_discrete_sequence = [lblue, green,orange, pink], 
-                    
-                    category_orders = {'significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
-                    labels = {'score_mean': f'{metric}', 'significant': 'Statistical Significance', 'markers':''}
-                    )
-    fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
-    fig.update_traces(marker=dict(size = 13))
+    metrics = ['AUC', 'F1', 'Kappa']
+    for metric in metrics:
+        fig = px.scatter(mw_glmm.sort_values(by = f'{metric}_mean'),x = f'{metric}_mean', y = 'Marker', template = "plotly_white", symbol = f'{metric}_significant', 
+                        symbol_sequence = ['circle-open','circle','hexagram' ],
+        #                  color = 'significant',
+                        color_discrete_sequence = [lblue, green,orange, pink], 
+                        
+                        category_orders = {'{metric}_significant': ['p > 0.05','p < 0.05 uncorrected', 'p < 0.05 FDR corrected']},
+                        labels = {f'{metric}_score_mean': f'{metric}', 'significant': 'Statistical Significance', 'markers':''}
+                        )
+        fig.add_vline(x=0.5, line_width=3, line_dash="dash", line_color="grey")
+        fig.update_traces(marker=dict(size = 13))
 
-    fig.update_layout(
-        width=850,
-        height=1300,
-    #     autosize = True, 
-        template = 'plotly_white',
-            font=dict(
-            family="Times new roman",
-            size=20,
-            color="black"
-        ),
-        xaxis = dict(
-                visible=True,
-                # range = [0.45,0.75], 
+        fig.update_layout(
+            width=850,
+            height=1300,
+        #     autosize = True, 
+            template = 'plotly_white',
+                font=dict(
+                family="Times new roman",
+                size=20,
+                color="black"
+            ),
+            xaxis = dict(
+                    visible=True,
+                    # range = [0.45,0.75], 
+                    tickfont = {"size": 20},
+                ),
+            yaxis = dict(
                 tickfont = {"size": 20},
-            ),
-        yaxis = dict(
-            tickfont = {"size": 20},
-            autorange = False,    
-            automargin = True,
-            range = [-1,len(mw_glmm)],
-            dtick = 1
-            ),
-        showlegend=True, 
+                autorange = False,    
+                automargin = True,
+                range = [-1,len(mw_glmm)],
+                dtick = 1
+                ),
+            showlegend=True, 
 
-    )
+        )
 
-    # fig.show()
+        # fig.show()
 
-    fig.write_image(os.path.join(fig_path,f'univariate_glmm_mw_perm_{metric}.png'))
-    fig.write_image(os.path.join(fig_path,f'univariate_glmm_mw_perm_{metric}.pdf'))
-    fig.write_html(os.path.join(fig_path,f'univariate_glmm_mw_perm_{metric}.html'))
+        fig.write_image(os.path.join(fig_path,f'univariate_glmm_mw_perm_{metric}_k{n_splits}.png'))
+        fig.write_image(os.path.join(fig_path,f'univariate_glmm_mw_perm_{metric}_k{n_splits}.pdf'))
+        # fig.write_html(os.path.join(fig_path,f'univariate_glmm_mw_perm_{metric}.html'))
 
 
