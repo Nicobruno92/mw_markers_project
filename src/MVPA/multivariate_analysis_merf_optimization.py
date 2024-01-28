@@ -5,6 +5,8 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from scipy.stats import trim_mean
+
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.offline as pyo
@@ -44,13 +46,17 @@ markers = ['wSMI_1', 'wSMI_2', 'wSMI_4', 'wSMI_8', 'p_e_1', 'p_e_2',
 erps =['CNV', 'P1', 'P3a', 'P3b']
 
 df_markers = (df
+              .dropna()
               .query("stimuli == 'go'") # only go trials
               .query("correct == 'correct'") #only correct trials
               .query('prev_trial < 5') # only last 5 trials before each probe. 
               .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events',  'epoch_type', 'preproc', 'ft', 'ft_n'], axis = 1) # drop unnecessary columns
               .query("mind in ['on-task','dMW', 'sMW']") # only mind wandering and on-task trials
-              .groupby(['segment', 'participant']).filter(lambda x: len(x) > 1) # drop participants with less than 2 trials per segment
+            #   .groupby(['segment', 'participant']).filter(lambda x: len(x) > 1) # drop participants with less than 2 trials per segment
              )
+
+
+comparisons = ['on-task_vs_mw','on-task_vs_dMW', 'on-task_vs_sMW', 'dMW_vs_sMW']
 
 def preprocess_data(df_markers, markers, probe_type, comparison=None, only_full_participants=False, latex_names=False, results_path=None):
     # Filtering and grouping
@@ -68,10 +74,11 @@ def preprocess_data(df_markers, markers, probe_type, comparison=None, only_full_
         df['mind_category'] = df['mind']
 
     # Aggregation dictionary
-    agg_dict = {k: ['mean', 'std'] for k in markers}
+    agg_dict = {k: [apply_trim_mean,'std'] for k in markers}
     agg_dict.update({k: 'first' for k in df.drop(markers, axis=1).columns})
     df = df.groupby(['segment', 'participant'], as_index=False).agg(agg_dict)
-
+    # df = df.groupby(['mind_category', 'participant'], as_index=False).agg(agg_dict)
+    
     # Renaming columns
     df.columns = df.columns.map("_".join)
     rename_dict = {
@@ -81,6 +88,10 @@ def preprocess_data(df_markers, markers, probe_type, comparison=None, only_full_
         'mind_first': 'mind',
         'mind_category_first': 'mind_category'
     }
+    
+    # Update rename_dict for mean columns
+    for marker in markers:
+        rename_dict[f"{marker}_apply_trim_mean"] = f"{marker}_mean"
     
     df = df.rename(columns=rename_dict)
 
@@ -99,18 +110,17 @@ def preprocess_data(df_markers, markers, probe_type, comparison=None, only_full_
 
     # Remove outliers
     columns_to_check = df.drop(['mind_category', 'mind_numeric', 'participant'], axis=1).columns
-    df = replace_outliers_with_participant_mean(df, columns_to_check, z_threshold=3)
+    # df = replace_outliers_with_participant_mean(df, columns_to_check, z_threshold=3)
 
     if only_full_participants:
         # Filter participants
-        df = df.groupby('participant').filter(lambda group: filter_participants(group, 'mind_numeric'))
+        df = df.dropna().groupby('participant').filter(lambda group: filter_participants(group, 'mind_numeric'))
 
     # Save to CSV if a path is provided
     if results_path:
         df.to_csv(os.path.join(results_path, f'data_{comparison}.csv'))
 
-    return df
-
+    return df.dropna()
 
 # Helper functions
 from scipy.stats import zscore
@@ -145,25 +155,31 @@ def filter_participants(group, mind_col_numeric):
     # Check if there is only one level of mind state for the participant
     if len(counts) == 1:
         return False
-    return all(count >= 2 for count in counts)
+    return all(count >= 1 for count in counts)
+
+# Define a function to apply the trimmed mean
+def apply_trim_mean(group):
+    return trim_mean(group, 0.1)
 
 #%%
 
 
 probe = 'PC'
 
-folds_list=  [5]
+folds_list=  [4]
 
 # %% [markdown]
 # This can only be performed for PC probes  as they are the only ones with On-task reports.
 
 
-# comparisons = ['on-task_vs_mw','on-task_vs_dMW', 'on-task_vs_sMW', 'dMW_vs_sMW']
-comparisons = ['on-task_vs_sMW']
+comparisons = ['on-task_vs_mw','on-task_vs_sMW', 'on-task_vs_dMW',  'dMW_vs_sMW']
+# comparisons = ['on-task_vs_sMW']
+# comparisons = ['dMW_vs_sMW']
+
 
 # %%
 for comparison in comparisons:
-    df = preprocess_data(df_markers, markers, probe_type = 'PC', comparison= comparison, only_full_participants=True, latex_names=False, results_path=None)
+    df = preprocess_data(df_markers, markers, probe_type = probe, comparison= comparison, only_full_participants=False, latex_names=False, results_path=None)
     for k in folds_list:
         # Assuming df_mw['participant'] contains the participant IDs
         # Prepare data
@@ -175,16 +191,16 @@ for comparison in comparisons:
         features = df.drop(['mind', 'mind_category', 'mind_numeric', 'participant',], axis=1).columns
 
         # Construct the file path for the study database
-        study_db_path = os.path.join(results_path, 'multivariate_merf_augmented_study.db')
+        study_db_path = os.path.join(results_path, 'multivariate_merf_study_final.db')
 
         RM_optimization = RepeatedMeasuresModel.Optimization(
             X, Z, y, groups, k, results_path, 
-            database_name = study_db_path, study_name= f'{comparison}_{probe}_K{k}', n_trials=200, 
-            data_augmentation=True,  save_to_df=True
+            database_name = study_db_path, study_name= f'{comparison}_{probe}_K{k}_trim', n_trials=300, 
+            data_augmentation=False,  save_to_df=True
         )
 
         importances_df = RM_optimization.get_best_model_feature_importances(features)
 
-        importances_df.to_csv(os.path.join(results_path, f'feat_imp_{comparison}_{probe}_K{k}_augmented.csv'))
+        importances_df.to_csv(os.path.join(results_path, f'feat_imp_{comparison}_{probe}_K{k}_trim.csv'))
 
-        RM_optimization.plot_feat_importances(filename = os.path.join(fig_path, f'{comparison}_feat_importance_{probe}_K{k}_augmented.png'), feature_names = features, color = pink, show= False,  save_fig = True)
+        RM_optimization.plot_feat_importances(filename = os.path.join(fig_path, f'{comparison}_feat_importance_{probe}_K{k}_trim.png'), feature_names = features, color = pink, show= False,  save_fig = True)

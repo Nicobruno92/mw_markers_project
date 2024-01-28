@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import GroupKFold
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier,ExtraTreesRegressor
-from sklearn.metrics import roc_auc_score, f1_score
+from sklearn.metrics import roc_auc_score, f1_score, cohen_kappa_score
 from xgboost import XGBRegressor
 
 import optuna
@@ -73,7 +73,22 @@ class Optimization:
             for trial_num in self.trial_data:
                 study_df.loc[study_df.number == trial_num, 'fold_aucs'] = str(self.trial_data[trial_num]['fold_aucs'])
                 study_df.loc[study_df.number == trial_num, 'feature_importances'] = str(self.trial_data[trial_num]['feature_importances'])
-            study_df.sort_values('value', ascending=False).to_csv(os.path.join(self.results_path, f'{self.study_name}_opt_trials.csv'))
+
+            # Define the file path
+            trials_file_path = os.path.join(self.results_path, f'{self.study_name}_opt_trials.csv')
+
+            # Check if the file already exists
+            if os.path.exists(trials_file_path):
+                # Read the existing data
+                existing_df = pd.read_csv(trials_file_path)
+
+                # Concatenate the existing data with the new data
+                combined_df = pd.concat([existing_df, study_df]).drop_duplicates().reset_index(drop=True)
+            else:
+                combined_df = study_df
+
+            # Save the combined DataFrame to CSV
+            combined_df.sort_values('value', ascending=False).to_csv(trials_file_path)
 
     def objective(self, trial):
         """
@@ -86,16 +101,16 @@ class Optimization:
             float: Average AUC over all folds.
         """
         # Model configuration and cross-validation
-        use_standardization = trial.suggest_categorical('use_standardization', [True, False])
+        use_standardization = trial.suggest_categorical('use_standardization', [False])
         use_pca = trial.suggest_categorical('use_pca', [False])
         n_components = trial.suggest_int('n_components', 2, min(self.X.shape[1], self.X.shape[0])) if use_pca else None
 
         if self.merf:
             # MERF-specific hyperparameters
             # Model-specific hyperparameter space
-            model = self.get_model(trial, model_type)
             model_type = trial.suggest_categorical('model_type', ['RandomForest',]) #'ExtraTrees', 'XGBoost'
-            gll_early_stop_threshold = trial.suggest_float('gll_early_stop_threshold', 0.001, 0.1, log=True)
+            model = self.get_model(trial, model_type)
+            gll_early_stop_threshold = trial.suggest_float('gll_early_stop_threshold', 0.005, 0.1, log=True)
             max_iterations = trial.suggest_int('max_iterations', 10, 100)
             
         else:
@@ -109,6 +124,7 @@ class Optimization:
             X_train, X_test = self.X.iloc[train_index], self.X.iloc[test_index]
             y_train, y_test = self.y.iloc[train_index], self.y.iloc[test_index]
             clusters_train, clusters_test = self.groups.iloc[train_index], self.groups.iloc[test_index]
+            Z_train = self.Z[train_index]
             
             if self.data_augmentation:
             # Data augmentation for balancing
@@ -121,7 +137,7 @@ class Optimization:
             # # Initialize and fit MERF model
                 merf = MERF(fixed_effects_model=model, gll_early_stop_threshold=gll_early_stop_threshold, max_iterations=max_iterations)
                 merf.fit(X_train, Z_train, clusters_train, y_train)
-                y_pred_proba = expit(merf.predict(X_test, self.Z[test_index], clusters_test))  # Convert outputs to probabilities
+                y_pred_proba = expit(merf.predict(X_test, self.Z[test_index], clusters_test))  # Convert outputs to probabilities                
                 
             else:
                 # Fit model
@@ -130,10 +146,14 @@ class Optimization:
 
             # Compute metrics
             optimal_threshold, auc = self.evaluate_model(y_test, y_pred_proba)
+            y_pred_class = (y_pred_proba > optimal_threshold).astype(int)
+            
+            kappa = cohen_kappa_score(y_test, y_pred_class)
+            
             scores.append(auc)
             
-            # feature_importances += merf.fe_model.feature_importances_
-            feature_importances += model.feature_importances_
+            feature_importances += merf.fe_model.feature_importances_
+            # feature_importances += model.feature_importances_
             
 
         # Compute average feature importances over all folds
@@ -163,7 +183,7 @@ class Optimization:
                     min_samples_split=trial.suggest_int('min_samples_split', 2, 20),
                     min_samples_leaf=trial.suggest_int('min_samples_leaf', 1, 20),
                     max_features=trial.suggest_float('max_features', 0.01, 1),
-                    criterion=trial.suggest_categorical('criterion', ['squared_error', 'absolute_error', 'friedman_mse']),
+                    criterion=trial.suggest_categorical('criterion', ['absolute_error']),
                     bootstrap=trial.suggest_categorical('bootstrap', [True, False]),
                     min_impurity_decrease=trial.suggest_float('min_impurity_decrease', 0.0, 0.1),
                     random_state=42,
@@ -458,6 +478,5 @@ class Optimization:
         if show:
             fig.show()
         if save_fig:
-            fig.write_image(filename)
             fig.write_image(filename)
 
