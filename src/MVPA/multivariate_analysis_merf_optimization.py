@@ -49,7 +49,7 @@ df_markers = (df
               .dropna()
               .query("stimuli == 'go'") # only go trials
               .query("correct == 'correct'") #only correct trials
-              .query('prev_trial < 5') # only last 5 trials before each probe. 
+              .query('prev_trial < 6') # only last 5 trials before each probe. 
               .drop(['stimuli', 'correct', 'prev_trial', 'label', 'events',  'epoch_type', 'preproc', 'ft', 'ft_n'], axis = 1) # drop unnecessary columns
               .query("mind in ['on-task','dMW', 'sMW']") # only mind wandering and on-task trials
             #   .groupby(['segment', 'participant']).filter(lambda x: len(x) > 1) # drop participants with less than 2 trials per segment
@@ -191,16 +191,16 @@ for comparison in comparisons:
         features = df.drop(['mind', 'mind_category', 'mind_numeric', 'participant',], axis=1).columns
 
         # Construct the file path for the study database
-        study_db_path = os.path.join(results_path, 'multivariate_merf_study_final.db')
+        study_db_path = os.path.join(results_path, 'multivariate_merf_study_final_6.db')
 
         RM_optimization = RepeatedMeasuresModel.Optimization(
             X, Z, y, groups, k, results_path, 
-            database_name = study_db_path, study_name= f'{comparison}_{probe}_K{k}_trim', n_trials=300, 
+            database_name = study_db_path, study_name= f'{comparison}_{probe}_K{k}_final_6', n_trials=300, 
             data_augmentation=False,  save_to_df=True
         )
 
         importances_df = RM_optimization.get_best_model_feature_importances(features)
 
-        importances_df.to_csv(os.path.join(results_path, f'feat_imp_{comparison}_{probe}_K{k}_trim.csv'))
+        importances_df.to_csv(os.path.join(results_path, f'feat_imp_{comparison}_{probe}_K{k}_final_6.csv'))
 
-        RM_optimization.plot_feat_importances(filename = os.path.join(fig_path, f'{comparison}_feat_importance_{probe}_K{k}_trim.png'), feature_names = features, color = pink, show= False,  save_fig = True)
+        RM_optimization.plot_feat_importances(filename = os.path.join(fig_path, f'{comparison}_feat_importance_{probe}_K{k}_final_6.png'), feature_names = features, color = pink, show= False,  save_fig = True)
