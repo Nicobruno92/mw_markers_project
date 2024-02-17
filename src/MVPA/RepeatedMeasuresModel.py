@@ -11,6 +11,8 @@ from sklearn.metrics import roc_auc_score, f1_score, cohen_kappa_score
 from xgboost import XGBRegressor
 
 import optuna
+from optuna.samplers import TPESampler
+from optuna.pruners import HyperbandPruner
 
 from merf import MERF
 from merf.utils import MERFDataGenerator
@@ -21,6 +23,8 @@ import plotly.graph_objects as go
 import plotly.offline as pyo
 import plotly.io as pio
 from plotly.subplots import make_subplots
+
+
 
 class Optimization:
     def __init__(self, X, Z, y, groups, folds, results_path, database_name, study_name, merf = True, n_trials=100, data_augmentation = False, save_to_df=True):
@@ -56,8 +60,20 @@ class Optimization:
         self.trial_data = {}  # Global dictionary for storing trial data
 
         study_db_path = os.path.join(self.results_path, self.database_name)
-        self.study = optuna.create_study(direction="maximize", study_name=self.study_name, storage=f'sqlite:///{self.database_name}', load_if_exists=True)
-        self.study.optimize(self.objective, n_trials=self.n_trials,  n_jobs=1,)
+        # Configure the sampler with specific hyperparameters and a random seed for reproducibility
+        sampler = TPESampler(n_startup_trials=10, n_ei_candidates=24, multivariate=True, seed=42)
+        
+        # Configure a more aggressive pruner
+        pruner = HyperbandPruner(
+            min_resource=1, 
+            max_resource=100, 
+            reduction_factor=3
+            )
+        self.study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner,
+                                         study_name=self.study_name, storage=f'sqlite:///{self.database_name}', load_if_exists=True)
+
+        
+        self.study.optimize(self.objective, n_trials=self.n_trials,  n_jobs=10,)
         
         self.best_value = self.study.best_trial.value
 

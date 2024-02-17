@@ -191,7 +191,7 @@ for comparison in comparisons:
         features = df.drop(['mind', 'mind_category', 'mind_numeric', 'participant',], axis=1).columns
 
         # Construct the file path for the study database
-        study_db_path = os.path.join(results_path, 'multivariate_merf_study_final_6.db')
+        study_db_path = os.path.join(results_path, 'multivariate_merf_study_6.db')
 
         RM_optimization = RepeatedMeasuresModel.Optimization(
             X, Z, y, groups, k, results_path, 
