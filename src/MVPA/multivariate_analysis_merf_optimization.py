@@ -61,13 +61,14 @@ comparisons = ['on-task_vs_mw','on-task_vs_dMW', 'on-task_vs_sMW', 'dMW_vs_sMW']
 def preprocess_data(df_markers, markers, probe_type, comparison=None, only_full_participants=False, latex_names=False, results_path=None):
     # Filtering and grouping
     df = df_markers.query(f"probe == '{probe_type}'")
+    mind_types = comparison.split('_vs_')
+    
 
     # Adjust mind categories based on comparison type
     if comparison:
         if comparison == 'on-task_vs_mw':
             df['mind_category'] = df['mind'].replace({'dMW': 'mw', 'sMW': 'mw'})
         elif comparison in ['on-task_vs_dMW', 'on-task_vs_sMW', 'dMW_vs_sMW']:
-            mind_types = comparison.split('_vs_')
             df = df[df['mind'].isin(mind_types)]
             df['mind_category'] = df['mind']
     else:
@@ -104,8 +105,8 @@ def preprocess_data(df_markers, markers, probe_type, comparison=None, only_full_
         df.columns = df.columns.map("$_{".join).map(lambda x: x + '}$').map(lambda x: x.replace('$$', ''))
 
     # Convert mind category to numeric for analysis
-    mind_categories = df['mind_category'].unique()
-    mind_category_numeric = {cat: i for i, cat in enumerate(mind_categories)}
+    # mind_categories = df['mind_category'].unique()
+    mind_category_numeric = {cat: i for i, cat in enumerate(mind_types)}
     df['mind_numeric'] = df['mind_category'].map(mind_category_numeric)
 
     # Remove outliers
@@ -172,7 +173,7 @@ folds_list=  [4]
 # This can only be performed for PC probes  as they are the only ones with On-task reports.
 
 
-comparisons = ['on-task_vs_mw','on-task_vs_sMW', 'on-task_vs_dMW',  'dMW_vs_sMW']
+comparisons = ['on-task_vs_dMW','on-task_vs_mw','dMW_vs_sMW','on-task_vs_sMW',   ]
 # comparisons = ['on-task_vs_sMW']
 # comparisons = ['dMW_vs_sMW']
 
@@ -191,16 +192,16 @@ for comparison in comparisons:
         features = df.drop(['mind', 'mind_category', 'mind_numeric', 'participant',], axis=1).columns
 
         # Construct the file path for the study database
-        study_db_path = os.path.join(results_path, 'multivariate_merf_study_6.db')
+        study_db_path = os.path.join(results_path, 'multivariate_merf_study_paper.db')
 
         RM_optimization = RepeatedMeasuresModel.Optimization(
             X, Z, y, groups, k, results_path, 
-            database_name = study_db_path, study_name= f'{comparison}_{probe}_K{k}_final_6', n_trials=300, 
+            database_name = study_db_path, study_name= f'{comparison}_{probe}_K{k}_paper', n_trials=500, 
             data_augmentation=False,  save_to_df=True
         )
 
         importances_df = RM_optimization.get_best_model_feature_importances(features)
 
-        importances_df.to_csv(os.path.join(results_path, f'feat_imp_{comparison}_{probe}_K{k}_final_6.csv'))
+        importances_df.to_csv(os.path.join(results_path, f'feat_imp_{comparison}_{probe}_K{k}_paper.csv'))
 
-        RM_optimization.plot_feat_importances(filename = os.path.join(fig_path, f'{comparison}_feat_importance_{probe}_K{k}_final_6.png'), feature_names = features, color = pink, show= False,  save_fig = True)
+        RM_optimization.plot_feat_importances(filename = os.path.join(fig_path, f'{comparison}_feat_importance_{probe}_K{k}_paper.png'), feature_names = features, color = pink, show= False,  save_fig = True)

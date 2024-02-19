@@ -61,19 +61,23 @@ class Optimization:
 
         study_db_path = os.path.join(self.results_path, self.database_name)
         # Configure the sampler with specific hyperparameters and a random seed for reproducibility
-        sampler = TPESampler(n_startup_trials=10, n_ei_candidates=24, multivariate=True, seed=42)
-        
+        sampler = optuna.samplers.TPESampler(
+            consider_prior=True,
+            n_startup_trials=20,  # More initial random exploration
+            n_ei_candidates=48,  # More candidates for EI calculation
+        )
+                
         # Configure a more aggressive pruner
         pruner = HyperbandPruner(
             min_resource=1, 
-            max_resource=100, 
-            reduction_factor=3
+            max_resource=50, 
+            reduction_factor=2
             )
         self.study = optuna.create_study(direction="maximize", sampler=sampler, pruner=pruner,
                                          study_name=self.study_name, storage=f'sqlite:///{self.database_name}', load_if_exists=True)
 
         
-        self.study.optimize(self.objective, n_trials=self.n_trials,  n_jobs=10,)
+        self.study.optimize(self.objective, n_trials=self.n_trials,  n_jobs=1,)
         
         self.best_value = self.study.best_trial.value
 

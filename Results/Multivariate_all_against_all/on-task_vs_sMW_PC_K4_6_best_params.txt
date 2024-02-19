@@ -1,0 +1,13 @@
+use_standardization: False
+use_pca: False
+model_type: RandomForest
+n_estimators: 48
+max_depth: 48
+min_samples_split: 4
+min_samples_leaf: 18
+max_features: 0.025566994607664574
+criterion: absolute_error
+bootstrap: True
+min_impurity_decrease: 0.018555857884134653
+gll_early_stop_threshold: 0.012943511963459138
+max_iterations: 12

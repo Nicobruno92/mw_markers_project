@@ -1,0 +1,4 @@
+n_estimators: 105
+max_depth: 18
+min_samples_leaf: 1
+max_features: 0.5070226435323502
