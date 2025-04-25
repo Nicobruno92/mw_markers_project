@@ -51,3 +51,12 @@ env.bak/
 venv.bak/
 
 eeg_cleaner.log
+
+.history/
+.vscode/
+.virtual_documents/
+.virtual_env/
+.virtualenv/
+.virtualenvs/
+.vscode/
+.vscode/
